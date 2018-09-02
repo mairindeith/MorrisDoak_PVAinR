@@ -416,7 +416,114 @@ ANOVA (or nonparametric analogs)
 <ol start="4" style="list-style-type: decimal">
 <li>Set class boundaries - for an age-structured model, widths of all classes must equal the interval between censuses; for stage-based classes, classes are synonymous with stages so this determines class boundaries. <strong>Deciding the number of classes is important</strong> - we want it to be large enough to encompass real differences in vital rates between classes (i.e. over-grouping can hide real differences) = more accurately reflects the time individuals require to advance from birth to reproduction caused by the processes of grwoth and matruation and have strong effects (e.g. if an organism takes 10 years to reproduce and we create 10 pre-reproductive classes to ensure individuals have to survive in each year from birth to reproduction; two pre-reproductive classes would result in some individuals to reproduce after 2 time intervals). <strong>Too many classes can also be problematic</strong> - there may not be many individuals in each class and we reduce sample size.</li>
 </ol>
-<p>Generally speaking, start with a large number of classes and then increase this</p>
+<p>Generally speaking, start with a large number of biologically/management-relevant classes; look at scatterplots of vital rates to see any substantial inflection/alteration points, check to see if there are individuals in each class and if not, reduce the number of classes. There are more formal approaches, but they are in practice rarely used.</p>
+</div>
+<div id="step-3.-estimating-vital-rates" class="section level3">
+<h3>Step 3. Estimating vital rates</h3>
+<div id="surival-rates" class="section level4">
+<h4>Surival rates</h4>
+<p>Proportion of individuals in class <span class="math inline">\(i\)</span> in the last census that are still alive at the current census. For stage-based methods, sum the number of marked individuals <em>regardless of their new state</em> and divide by total number of survivors over total number of individuals. This can also be done with continuous variables - but this estimates survival for classes into which few individuals happen to fall = small sample size susceptible to variation and poor precision (can only estimate to the nearest 25%).</p>
+<p>For age or size based models, M+D recommend a 2-stage process:</p>
+<ol style="list-style-type: decimal">
+<li>Use the entire demographic data to perform logistic regression against age/size</li>
+<li>Use the fitted regression equation to calculate survival for each class (pooling the data reduces the influence of chance variation and loss of precision and yields smooth changes in survival among age classes - *if there is a noticeable jump between young and older classes, it is possible to separate the youngest class then conduct the regression on the older classes only). There are three ways to do this:
+<ol style="list-style-type: decimal">
+<li>Take the midpoint of each age/size class, substitute it into the logistic regression equation as the independent variable, then estimate survival on those midpoints (assumes that individuals are clustered around the midpoint)</li>
+<li>If the distribution of sizes in a class is skewed/not centrally clustered, use the median size from a random sample as the independent variable</li>
+<li>Use actual sizes for each individual, then average the survival rates within each class from the logistic regression results to reflect population-wide distribution of ages/sizes of individuals in the class</li>
+</ol></li>
+</ol>
+<p><strong>Golden heather example</strong> - we first choose class boundaries with reasonable number of plants in each of four size classes (plant area 0-25cm^2, 25-50, 50-100, 100+). The equation for logistic regression is <span class="math inline">\(y = \frac{e^{b_0 + b_1x}}{1+e^{b_0 + b_1x}}\)</span> where <span class="math inline">\(y\)</span> is predicted survival probability for plants with area <span class="math inline">\(x\)</span>. The midpoint of each regression is the survival for that class.</p>
+</div>
+<div id="state-transitiongrowth-rates" class="section level4">
+<h4>State transition/growth rates</h4>
+<p>If individuals are classified by size or stage, we need to include transition/growth rates.</p>
+<p>The simplest way is to first place survivors from the marked population into a class transition table - columns = survivor’s class at the previous census, rows = class at current census. Dividing each element in the table by the column total yields transition probabilities. <strong>Note: this can be biased by small population sizes</strong> - more sophisticated methods do exist though.</p>
+</div>
+<div id="alternative-ways-for-estimating-survival-ratesclass-transition-rates-using-capture-recapture-data-and-size-vs.age-relationships" class="section level4">
+<h4>Alternative ways for estimating survival rates/class transition rates using capture-recapture data and size vs. age relationships</h4>
+<p>It has been assumed that all marked individuals can be found - but this may not be true for small or highly mobile species in complex habitats. This introduces observation error and can complicate the interpretation of census data used in count-based PVAs - <em>we must also calculate the probability that a live, marked individual will not be captured in the following census.</em></p>
+<p>ML methods have been developed to deal with this problem - see MARK for example. Another method uses the length of time it takes for an individual to grow from one benchmark size to another (i.e. size class boundaries) and the probability of surviving over those years. This gives the average time in each class and estimate of survival rate.</p>
+</div>
+<div id="fertility-rate" class="section level4">
+<h4>Fertility rate</h4>
+<p>The average number of offspring produced by an individual in each year <strong>regardless of whether those offspring survive to the next class</strong>. In stage class models, this is the arithmetic mean. In age- or size-class models, they advocate using all individuals in the dataset to estimate reproduction simultaneously for all classes (like was done in for survival above).</p>
+<p>For organisms with multiple modes of reproduction (e.g. sexually produced seeds and vegetative ramets), there are different contributions of fecundity to growth rate. Fecundity for each mode can be calculated as above.</p>
+</div>
+</div>
+<div id="step-4.-building-the-projection-matrix" class="section level3">
+<h3>Step 4. Building the projection matrix</h3>
+<p>Number of rows <strong>and</strong> number of columns = number of classes. <span class="math inline">\(a_{i,j}\)</span> is the element in row <span class="math inline">\(i\)</span> and column <span class="math inline">\(j\)</span> of the matrix; or the probability that an individual of class <span class="math inline">\(j\)</span> in this census with contribute to an individual of class <span class="math inline">\(i\)</span> in the next. In other words, individuals transition from <span class="math inline">\(j\)</span> to <span class="math inline">\(i\)</span>. <span class="math display">\[A = \begin{bmatrix} 
+a_{1,1} &amp; a_{1,2} &amp; a_{1,3}\\
+a_{2,1} &amp; a_{2,2} &amp; a_{2,3} \\
+a_{3,1} &amp; a_{3,2} &amp; a_{3,3} 
+\end{bmatrix}\]</span></p>
+<p>When classed by age:</p>
+<p><span class="math display">\[A_1  =
+\begin{bmatrix} 
+0 &amp; F_2 &amp; F_{3} &amp; F_4\\
+P_{1} &amp; 0 &amp; 0 &amp; 0\\
+0 &amp; P_{2} &amp; 0 &amp; 0\\
+0 &amp; 0 &amp; P_{3} &amp; 0\\
+\end{bmatrix}
+\]</span></p>
+<p>The sub-diagonal is probability of living to the next age.</p>
+<p>When classed by size (but growth can vary, such that an individual can stay in the same stage <span class="math inline">\(P_{1,1}\)</span>, grow to the next stage <span class="math inline">\(P_{2,1}\)</span>, or revert to a smaller stage <span class="math inline">\(P_{1,2}\)</span> <span class="math display">\[A_2  =
+\begin{bmatrix} 
+P_{1,1} &amp; F_2+P_{1,2} &amp; F_{3} &amp; F_4\\
+P_{2,1} &amp; P_{2,2} &amp; P_{2,3} &amp; 0\\
+0 &amp; P_{3,2} &amp; P_{3,3} &amp; 0\\
+0 &amp; 0 &amp; P_{4,3} &amp; P_{4,4}\\
+\end{bmatrix}
+\]</span> When classed by stage (three pre-reproductive classes ) <span class="math display">\[A_3  =
+\begin{bmatrix} 
+P_{1,1} &amp; 0 &amp; 0 &amp; F_4\\
+P_{2,1} &amp; P_{2,2} &amp; P_{2,3} &amp; 0\\
+0 &amp; P_{3,2} &amp; P_{3,3} &amp; 0\\
+0 &amp; 0 &amp; P_{4,3} &amp; P_{4,4}\\
+\end{bmatrix}
+\]</span></p>
+<p>The diagonal represents the probability of surviving and moving on to the next class; first row represents reproduction. Surviving adults can only remain in the adult class, but for some stage-based models it may be appropriate to have some individuals revert to an earlier stage (e.g. those that lose a breeding territory).</p>
+</div>
+<div id="step-5.-building-the-matrix-from-underlying-vital-rates" class="section level3">
+<h3>Step 5. Building the matrix from underlying vital rates</h3>
+<p>Three types of vital rates:</p>
+<ol style="list-style-type: decimal">
+<li><span class="math inline">\(s_j\)</span>, survival rate for class <span class="math inline">\(j\)</span></li>
+<li><span class="math inline">\(f_j\)</span>, fertility rate</li>
+<li><span class="math inline">\(g_{i,j}\)</span>, probability that individual in class <span class="math inline">\(j\)</span> makes the transition to <span class="math inline">\(i\)</span> <strong>given that it survives</strong></li>
+</ol>
+<p>These are the vital rates, while <span class="math inline">\(F\)</span> and <span class="math inline">\(P\)</span> will serve as matrix elements.</p>
+<div id="class-transition-probabilities" class="section level4">
+<h4>Class transition probabilities</h4>
+<p><strong>Age-structured models</strong> Survival is all we need to estimate class transitions - if they survive, they must enter a new age. Put class-specific survivals, <span class="math inline">\(s_j\)</span> along the principal subdiagonal of the matrix (e.g. <span class="math inline">\(a_{j+1, j} = P_j = s_j\)</span>). All individuals in the oldest age class are assumed to die in the next year.</p>
+<p><strong>Size/stage structured models</strong> State-based models can have progression or regression between states - <span class="math inline">\(P_{i,j} = s_j * g_{i,j}\)</span>, the probability that an individual in size class <span class="math inline">\(j\)</span> at the current census survives to the next census and the probability that they transition.</p>
+<p><strong>Reproduction</strong> Reproduction combines vital rates - fertility plus the survival rate of adults and/or offspring. There are four possible scenarios to consider:</p>
+<ol style="list-style-type: decimal">
+<li><strong>Birth-pulse populations with a pre-breeding census</strong>: youngest class (1) will be those that were produced in the previous pulse; to contribute to the next census adults must produce newborns immediately after the census (<span class="math inline">\(a_{1,j} = F_j = f_j s_0\)</span> where <span class="math inline">\(s_0\)</span> is survival in the first year) - <em>a disadvantage of this method is thaht it does not allow us to investigate whether changing offspring production or newborn survival would have a greater effect on population growth</em>.</li>
+<li><strong>Birth-pulse populations with a post-breeding census</strong>: the reproductive terms are now the number of newborns that each adult in the current census will contribute to the next census - the adult must survive for a full year and then reproduce (<span class="math inline">\(a_{1,j} = F_j = s_jf_j\)</span>)</li>
+<li><strong>Birth-pulse populations with an intermediate census</strong>: offspring are first observed at the next census - the reproduction element in the matrix is the average of the number of offspring at the next census attributable to each individual in class <span class="math inline">\(j\)</span> at the previous census (would be zero if the individual dies, their offspring dies, or they do not produce any offspring). One could parameterize a model with an intermediate pulse if they have data for probability of survival between the pulse and the census for both adults and offspring, but this needs a census of the population near the birth pulse. It may be reasonable to pretend that fecundity happens after it actually does - e.g. at fledging of new birds - reproduction is the survival rate of an individual at the current census times the number of <em>surviving</em> fledglings.</li>
+<li><strong>Birth flow populations</strong>: the simplest approach is to pretend that all offspring are born at the mid-point of the interval. Reproduction is then the product of
+<ul>
+<li>Probability that class <span class="math inline">\(j\)</span> survives from one census to the midpoint of the next inter-census interval (if survival is more or less constant over the year, can approximate as the square root of annual survival <span class="math inline">\(\sqrt{s_j}\)</span>)</li>
+<li>Average number of offspring to which each surviving <span class="math inline">\(j\)</span> individual gives birth over an inter-census interval (summed over repeated checks performed through the interval), <span class="math inline">\(f_j\)</span></li>
+<li>Probability that an offspring produced at the midpoint of the inter-census period survives to the next census, approximately <span class="math inline">\(\sqrt{s_0}\)</span></li>
+</ul></li>
+</ol>
+<p>There are more complex ways to do this.</p>
+</div>
+</div>
+<div id="example---golden-heather" class="section level3">
+<h3>Example - golden heather</h3>
+<p>Six classes based on size:</p>
+<ol style="list-style-type: decimal">
+<li>Seeds in the seed bank</li>
+<li>Seedlings</li>
+<li>Tiny plants (0-25cm^2 in area)</li>
+<li>Small plants (25-50cm2)</li>
+<li>Medium plants (50-100cm2)</li>
+<li>Large plants (&gt;100cm2)</li>
+</ol>
 </div>
 </div>
 

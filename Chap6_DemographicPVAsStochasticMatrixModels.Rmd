@@ -209,3 +209,23 @@ Reproduction is then the product of
    - Probability that an offspring produced at the midpoint of the inter-census period survives to the next census, approximately $\sqrt{s_0}$
    
 There are more complex ways to do this.
+
+### Example - golden heather
+
+Six classes based on size:
+
+1. Seeds in the seed bank
+2. Seedlings
+3. Tiny plants (0-25cm^2 in area)
+4. Small plants (25-50cm2)
+5. Medium plants (50-100cm2)
+6. Large plants (>100cm2)
+
+Not all seeds germinate the spring after they are produced - reproduction comes from: 
+
+1. contributions by above-ground plants into the seed bank ($a_{1,j}=f_j*g_{1,1}*s_1$, where $s_1$ is the probability that the seed survives until the next spring)
+    - $g_{1,1} = 0.99, s_1 = 0.5$
+2. contributions by above-ground plants to seedlings in the next year ($a_{2,j} = f_j * (1-g_{1,1}) *s_0 *s_1$, where $s_1$ is the probability the seedling survives its first summer)
+    - $1-g_{1,1}=0.01, s_0 = 0.5^{7/12} = 0.6674$
+
+Therefore $a_{1,1} = 0.5*0.99 = 0.4950$, with year-specific survival rates and class-specific fecundities used to fill in the rest of the matrix.
