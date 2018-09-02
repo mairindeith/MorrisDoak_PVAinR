@@ -1,0 +1,277 @@
+---
+title: "Chapter 5 - Accounting for Observation Error in Count-Based VPAs"
+author: Mairin Deith
+output: html_document
+---
+
+Previous chapters showed how to account for demographic stochasticity and density dependence. 
+Chapter 5 deals with **observation error**. 
+
+Observation error can come about in a few ways:
+
+- **Sampling variation** - introduced when a population (i.e. a statistical population, the entire group that could be sampled) is sub-sampled; results from collecting limited amounts of data *even if the data are measured accurately*
+  - This occurs when individuals are not uniformly distributed aacross the landscape in every census - we will sample a different subunit of the population 
+  - We will introduce additional variance in our value of $\sigma^2$ for the **estimated** log growth rate, which would be erroneously attributed to environmental variation and provide pessimistic extinction probabilities
+- This assumes that the counts are perfectly accurate; we can also introduce **bias** in our estimates
+  - if bias is consistent in each year, our log population growth is unaffected (because it is a proportional measure)
+  - On the other had, if there is variation among censuses in the amount of bias, there will be artificially inflated values for $\sigma^2$
+  - If bias is non-proportional (i.e. bias in the census over or undercounts the same *number* of animals, *not the same proportion*), then both $\mu$ and $\sigma^2$ can be biased
+  - Bias occurs when the mean value of a parameter, e.g. $\mu$, differs from the true mean value across the entire population; bias in $\sigma^2$ is almost always positive
+
+We can never eliminate the influence of observation error, but we can attempt to minimize its effects.
+Observation error can change the parameter mean value from the true value (bias), or decrease the precision of parameter estimates (countered by collecting more samples/data - easier said than done for rare populations).
+
+## Designing a census to minimize bias
+
+1. First year of the census - intentionally exert more sampling effort than in consecutive years, make it a trial run to determine sampling methods and effort; use several sampling techniques; **evaluate how quickly sampling variation decreases with increasing effort**
+2. Formalize clear protocol with clear and consistent training; avoid highly specialized skills for transferability
+3. Establish a **stratefied random sampling** approach of census plots, **but then use those plots for the rest of the censuses** - reduces the confounding effect of spatial variation in density or detectability
+4. If impossible to count all members, choose the most easily detected (*these are often the largest and contribute the most to population growth*)
+5. Design data collection/recording procedures for clear and quantified sampling effort
+
+## Quantifying observation errors during a census
+
+It is much easier to quantify observation error during a census - do this by avoiding pooling data (i.e. maintain sample-specific means and estimates of log-growth/sigma parameters). 
+Performing some repeated sampling in a few years will also help ID observation error - visit the same area multiple times - if they are close in time, variation can be assumed to arise from observation error rather than environmental variation or migration (unless the species is highly mobile).
+
+Also keep track of effort - the count should be adjusted for exerted effort. 
+Without effort tracking, it is impossible to differentiate real variation from observation errors. 
+
+## Correcting for observation error
+
+Using the negative binomial distribution (takes on integer values 0+, assumes that variance > mean unlike a conventional Poisson) as the distribution of number of individuals in a series of repeated samples. 
+The mean of individual draws from the negative binomial is assumed to mimic the true mean of the population $N_t$. 
+If individuals are aggregated in space, the variance is going to be quite large and the means of indiduals/area is going to be highly variable between replicated samplings. 
+
+As sampling variation increases, the precision decreases for **both** $\mu$ and $\sigma^2$ estimates, and increases the mean value of $\sigma^2$. 
+This leads to more pessimistic outcomes. 
+
+We can *approximate* the variance in $log \lambda_t$ as a function of sampling variance of two sampling events (at times $t$ and $t+1$):
+
+$$Var(log\lambda_t) \approx \Big(\frac{\delta log_t }{\delta \bar{N_t}} \Big)^2 Var(\bar{N_t}) + \Big( \frac{\delta log_t }{\delta \bar{N}_{t+1}} \Big)^2 Var(\bar{N}_{t+1}) = \frac{Var \bar{N}_t}{\bar{N}_t^2} + \frac{Var \bar{N}_{t+1}}{\bar{N}_{t+1}^2}$$
+Because of the Central Limit Theorem, the variance can be approximated by the squared standard error of the mean $Var(\bar{N_t})=s^2_t / n_t$.
+Where $s_t$ is the standard deviation of the $n_t$ counts used to compute $\bar{N}_t$.
+
+We can now adjust our value for $\sigma^2$ by using the average variance in each of the $q$ censuses as an overall measure of the mean variance in log $\lambda$ that is due to sampling variation in the $\bar{N}$s.
+
+$$\bar{Var(log \lambda)} = \frac{1}{q} \sum^q_{t=1} \Big[ \frac{s_t^2}{n_t \bar{N}_t^2} + \frac{s_{t+1}^2}{n_{t+1} \bar{N}_{t+1}^2} \Big] $$
+```{r}
+# Code to correct a raw estimate of sigma-sq for sampling variation when census counts are raw means from replicate samples
+
+# Columns are years (21), individual samples are rows (10); NaN indiciates placeholders for samples with fewer samples
+samples <- matrix(c(10,11,7,0,14,0,6,26,22,12,6,10,22,20,39,31,23,21,14,14,19,
+                    8,4,6,13,1,14,23,10,11,11,10,8,11,27,19,18,16,15,32,38,21,
+                    1,10,11,27,36,16,18,13,29,7,5,2,16,7,25,15,21,12,15,18,9,
+                    7,8,1,9,17,14,9,11,24,13,4,8,12,28,8,15,21,11,30,28,15,
+                    0,16,10,5,16,17,4,19,13,14,21,10,14,6,21,12,8,8,6,14,32,
+                    7,6,5,4,2,15,3,10,13,9,15,22,6,33,14,23,8,14,27,28,17,
+                    5,11,10,21,10,23,12,7,14,12,11,11,22,10,44,5,12,17,21,42,40,
+                    2,16,15,8,6,6,12,14,15,18,9,5,4,7,20,22,14,5,16,13,30,
+                    6,5,12,11,10,6,18,8,17,7,22,13,NaN,5,15,7,8,29,25,16,23,
+                    6,6,NaN,25,10,14,19,4,16,7,19,6,NaN,10,16,18,14,15,11,26,18),
+                  nrow=10,
+                  ncol=21)
+# Critical values for the chi-sq distribution with 20 degrees of freedom with p=0.025 and p=0.975
+chi2crit <- c(34.161958143, 9.590772476)
+
+# Set the tolerance 
+tolerance=1e-8
+
+n <- rowSums(!is.na(samples))
+# q=number of censuses -1
+q <- dim(samples)[1]-1
+
+Nbar <- vector()
+Vs <- vector()
+
+for(t in 1:(q+1)){
+  samplest <- samples[t,1:n[t]]
+  Nbar[t] <- mean(samplest, na.rm = T)
+  Vs[t] <- var(samplest, na.rm = T)
+}
+
+# Compute raw estimates of mu and sigma^2 with conventional method
+loglam <- vector()
+for(t in 1:q){
+  loglam[t] <- log(Nbar[t+1]/Nbar[t])
+}
+muest <- mean(loglam, na.rm=T)
+s2raw <- var(loglam, na.rm=T)
+s2raw
+```
+```{r}
+# compute the component fo total variance due to sampling
+sampleVar <- vector()
+for(t in 1:q){
+  sampleVar[t] <- Vs[t]/(n[t]*Nbar[t]^2)+Vs[t+1]/(n[t+1]*Nbar[t+1]^2)
+}
+MeanVar <- sum(sampleVar)/q
+
+MeanVar
+```
+```{r}
+# Compute the simple corrected estimate of sigma^2
+s2corr <- s2raw-MeanVar
+s2corr
+```
+```{r}
+
+# Compute the corrected estimate of sigma^2 using the method of White (2000)
+#     Weight by the sum of env and sampling var in each year 
+Dev2 <- (loglam-muest)^2
+
+# Need this library for the fzero function - this function finds the root of an equation 
+library(pracma)
+func <- 'sum(Dev2/(s2+sampleVar))-q+1'
+s2corrwhite <- fzero(function(s2) sum(Dev2/(s2+sampleVar))-(q+1), s2raw)
+
+## I cannot get this function to work...
+```
+
+Moving on. Here's the raw MATLAB code for future tweaking:
+```{}
+options=optimset('To1X',tolerance)
+
+s2corrwhite=fzero(inline('sum(Dev2./(s2+SampleVar))-q+1',...
+   's2','Dev2','SampleVar','q'), s2raw, options, Dev2, SampleVar,q);
+
+% It may be necessary to use different start values to get reasonable confidence limits
+start=0.001
+s2lower=fzero(inline('sum(Dev2./(s2+SampleVar))-chi2', 's2',...
+   'Dev2','SampleVar','chi2'),...
+   start,options,Dev2, SampleVar,chi2crit(1));
+
+start=0.1
+s2upper=fzero(inline('sum(Dev2./(s2+SampleVar))-chi2', 's2',...
+   'Dev2','SampleVar','chi2'),...
+   start,options,Dev2, SampleVar,chi2crit(2));
+CI=[s2lower,s2upper]
+```
+
+
+Increasing the number of samples ALWAYS creates a corrected estimate that is less biased than the raw estimate. 
+It is important to compute confidence intervals for our estimates because it is rarely possible to estimate $\mu$ and $\sigma^2$ with as much precision as we want. 
+
+Note that the approximate assumes that the mean of the samples, $\bar{N}_t$ is an unbiased estimate of the true mean population in year $t$. 
+When $N_t$ is biased, the corrected $\sgima^2$ is less able to removing the influence of observation error. 
+This is especially the case when the variance is far greater than the mean $\bar{N}_t$.
+In fact, if sampling variance is high enough, *it is possible to calculate negative values for corrected $\sigma^2_{corr}$.
+
+### Using repeated censuses of the same area to discount for observation area
+
+In this case, assume that poopulation size is estimated by obtaining a single count of all individuals in an area with a known fraction of the total range and extrapolated. 
+In some years, repeatedly sample to get an estimate of the magnitude of observation error - all observed error is observer error, **not sampling error** as we are censusing the same area.
+
+We do not have a set of replciate samples each year - instead we can extrapolate the observation error in the repeated censuses to the whole population scale. 
+
+If $V_t$ is the variance of counts from the repeatedly sampled area in year $t$, and $a_t$ is the total area occupied by the population, and $C_t$ is the estimated population size ($C_t = c_t/b_t$, census divided by the proportion of area covered in census, $b_t$) in year $t$, the variance in $C_t$ due to observation error is $Var(C_t) \approx a_t^2 V_t$. 
+If $log(C_t/C_{t+1})$ is the estimate for our population growth:
+
+$$ Var(log\lambda_t) = ... = \frac{a_t^2 V_t}{C_t^2} + \frac{a_{t+1}^2 V_{t+1}}{C_{t+1}^2} $$
+
+Averaging across all years of the census and subtracting the average from the raw estimate of $\hat{\sigma}^2$ provides an estimate of $\sigma^2$ corrected for observation error. 
+If we have multiple repeated samples, we can use regression for the separate variance estimates ($Var(C_t)$) against the total counts in those years and use the regression to predict the variance of counts from years in which repeated sampling was not performed.
+
+This assumes that $Var(C_t)$s aren't too large and may not apply if observation error is very high. 
+It also assumes (like the previous method) that $C_t$ measures are unbiased.
+This may be correct if observation error is due to sampling variation, if sampling is appropriately randomized, and counts are accurate - but may not apply if observation error results only from counting errors. 
+
+### Reducing the impact of fluctuations in population structure and observation errors without replicate samples
+
+We often lack replicate counts taken during a single census - if each census has a total count, published data only has means - we cannot use the above methods. 
+Holmes (2001) has introduced a new way to deal with this issue. 
+
+This method is useful when the species has **short, well-known lifespan**, individuals **reproduce only once**, census targets a **subset of individuals**, e.g. breeding females. 
+The method uses *running sums* instead of the raw counts to estimate $\mu$ and $\sigma^2$.
+
+e.g. Running sum with 3 censuses - add the counts from the first, second, third censuses; then second, third, fourth; third, fourth, fifth... to create $n-L+1$ running sums consisting of $L$ years each. 
+These are then used in a modified regression to estimate $\mu$ and $\sigma^2$. 
+
+Reasons to use running sums:
+
+1. Variations in counts can be caused by changes to structure - i.e. relative proportions in different age/size classes
+2. Variations in counts can also be caused by environmental variation - **this is what we want**
+
+e.g. Salmon spawners - only count the fish that come into spawning streams at age 4/5, but we want to know how many fish there are in the entire stock. 
+Using the last 5 years of spawners to calculate the total population size at present - the uncounted population includes one-year-olds from last year, two-year-olds from two years ago, etc.
+
+If $S_t$ is the number of spawners at $t$, and $f_t$ is the number of offspring each spawner produces that survives to age $x$ and do not return to spawn:
+$$ T_t = S_t + f_{t-1}s_{1,t-1}S_{t-1}+f_{t-2}s_{2,t-2}S_{t-2}+...+f_{t-4}s_{4,t-4}S_{t-4}$$
+The total size of the population at the current census is the weighted sum of the five most recent spawner counts.  
+If we don't know the values of $f_t$ or $s_{x,t}$, we can use an unweighted sum of the most recent counts as a surrogate for total population size to partially reduce the potential for confounding fluctuations in population structure with environmental stochasticity. 
+
+These sums can also be used to **counteract observation errors** - it is unlikely thhat all counts are over/underestimates compared to single census counts - they will likely cancel out somewhat.
+
+#### The regression method
+We regress the transformed log population growth rate against the square root of time elapsed between paired intervals. 
+
+1. Match up all possible pairs of running sums separated by $\tau = 1, 2, ..., \tau_{max}$ years
+2. Compute log pop growth over that interval ($log(R_{t+\tau}/R_t)$ where $R_t$ is the running sum beginning in year t)
+3. Calculate means and variances of $log(R_{t+\tau}/R_t)$ for each value of $\tau$ (if values are missing and they are few, use interpolation)
+4. Regress these means and variances against $\tau$ - slope = $\hat\mu$, slope of linear regression of the variances against $\tau$ is an estimate of $\sigma^2$ (intercept is not fixed to zero - intercept represents non-process error)
+
+The reasoning - $log(R_{t+\tau}/R_t)$ are $\mu$ and $\sigma^2$ multiplied by the time interval, $\tau$. 
+
+```{r box 5.2 - dennisholmes}
+dennisholmes <- function(rawCounts, L, taumax){
+  numCounts <- length(rawCounts)
+  # Empty vector
+  runSum <- vector()
+  # Loop over all possible values of tau
+  for(i in 1:(numCounts-L+1)){
+    runSum <- c(runSum, sum(rawCounts[i:(i+L-1)]))
+  }
+  # Compute means and varainces of the log population
+  taus <- vector()
+  means <- vector()
+  vars <- vector()
+  
+  for(tau in 1:taumax){
+    R <- vector()
+    for(i in 1:(numCounts-L+1-tau)){
+      R <- c(R, log(runSum[i+tau]/runSum[i]))
+    }
+    taus <- c(taus, tau)
+    means <- c(means, mean(R))
+    vars <- c(vars, var(R))
+  }
+  
+  # Now compute regression slopes of means and vars vs. tau
+  # 1. Center tau, means, and vars by subtracting their respective means
+  taus <- taus-mean(taus)
+  means <- means-mean(means)
+  vars <- vars-mean(vars)
+  
+  # 2. With centred dependent/independent variables, regress:
+  mu <- (taus*means)/(taus*taus)
+  sigma2 <- (taus*vars)/(taus*taus)
+  
+  return(list(mu=mu, sigma=sigma2))
+}
+
+# Test with some random numbers with a 3-year running sum
+dennisholmes(rawCounts = c(12,14,15,13,15,16,13,14,15,16), L = 3, taumax = 4)
+```
+
+Note: the Holmes method can reduce bias in estimates of $\sigma^2$ caused by observation error, but its ability to do so without **underestimating** $\sigma^2$ hinges on making the right choice for $\tau$ and $L$, the running sum (more important). 
+These can strongly influence parameter estimates.
+```{r}
+dennisholmes(rawCounts = c(12,14,15,13,15,16,13,14,15,16), L = 5, taumax = 4)
+```
+```{r}
+dennisholmes(rawCounts = c(12,14,15,13,15,16,13,14,15,16), L = 2, taumax = 4)
+```
+The smaller $L$ becomes, the smaller our estimate of $\sigma^2$ - we simultaneously reduce the effect of observation error and environmental variation.  
+
+Recommendation: 
+
+1. Use Holmes method for short-lived organisms who are semelparous - **do not set the running sum longer than the lifespan**
+2. Repeat this with $L$ from 1 to the known lifespan to see how it is influenced by running length
+
+It's better to use shorter L's simply because it provides more pessimistic estimates for persistence - it's better to be precautionary. 
+
+There are other methods as well: 
+
+- Total least-squares method (Ludwig and Walters 1981, Ludwig et al. 1988, Ludwig 1999) - assumes log population size in year t is the log of the true population size in year t+1 plus some observation error
+- Use prior estimate of ratio of observation error variance and environmental variance (Ludwig and Walters 1981, ...) - if you guess at this, the results will not be very accurate. For many count-based datasets, total least squares will be impossible to apply
+- State-space modelling - there is a population model that models the 'true' but unobserved population size and an observation model - fit a likelihood function to describe the probability of obtaining the observed population sizes given a particular set of parameter values, then use MLE for these parameters with integration or MCMC techniques

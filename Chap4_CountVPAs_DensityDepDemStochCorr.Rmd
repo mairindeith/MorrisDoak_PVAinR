@@ -1,0 +1,814 @@
+---
+title: "Chapter 4 - Count-Based VPAs (Incorporating density dependence, demographic stochasticity, correlated environments, catastrophes, and bonanzas)"
+author: Mairin Deith
+output: html_document
+---
+<!--
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{natserv vignette}
+%\VignetteEncoding{UTF-8}
+-->
+=====
+
+In almost every population we study, some of the assumptions of the simple count-based VPAs are going to be wrong. 
+Even if we know that violations are likely to occur, having more accurate modelsrequires more and better data.
+
+## Density dependence
+
+Negative density dependence places a cap on how far away a population can move from its extinction threshold even if it grows more when the population is small. 
+
+The simplest way to incorporate density dependence is with a *ceiling model*:
+
+if $\lambda_t N_t$ ≤ $K$, $N_{t+1} = \lambda_t N_t$, otherwise
+
+$N_{t+1} = K$.
+
+There is also the more complex **theta logistic model**. 
+
+$$ N_{t+1} = N_t exp \lbrace r \lbrack 1- \lbrace \frac{N_t}{K} \rbrace^\theta  \rbrack - \epsilon_t \rbrace $$
+
+$\theta$ determines how the population growth rate declines as the population increases. 
+When $\theta = 1$, it becomes the Ricker model, i.e. linear decline of population growth rate $log(\lambda_t) = log(N_{t+1}/N_t)$.
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(dplyr)
+
+Nt <- seq(1,100,by=1)
+r <- 0.05
+K=100
+
+popsize <- data.frame(Nt=Nt, theta4=NaN, theta1=NaN, theta.3=NaN)
+theta <- c(4,1, 0.3)
+for(i in 1:length(theta)){
+  theta.tmp <- theta[i]
+  print(theta.tmp)
+  for(row in 1:nrow(popsize)){
+    Nt.tmp <- popsize$Nt[row]
+    Nt1 <- Nt.tmp * exp(r*(1-(Nt.tmp/K)^theta.tmp))
+    popsize[row,i+1] <- log(Nt1/Nt.tmp)
+  }
+}
+
+ggplot(data=popsize, aes(x=Nt))+
+  geom_line(aes(y=theta4), color='red')+
+  geom_line(aes(y=theta1), color='blue') +
+  geom_line(aes(y=theta.3), color='black')
+```
+
+Extinction risk predicted by the ceiling model. 
+In any model with negative density dependence causes all trajectories to hit the extinction threshold is always 1. 
+
+From the diffusion approximation, we can write an expression for the mean time to reach the quasi-extinction threshold $N_x$ from a current population size $N_c$. 
+
+$$ \bar{T} = \frac{1}{2 \mu c}[e^{2ck} (1-e^{-2cd}) - 2cd]$$
+
+where $c = \mu / \sigma^2$, $d = log(N_c/N_x)$, and $k=log(K/N_x)$. 
+
+```{r box4.1}
+# Code to plot the mean time to extinction vs. K and starting population size for the ceiling model
+
+mu <- 0.1
+s2 <- 0.1
+c <- mu/s2
+
+# Plot mean time to extinction as per equation 4.4
+K <- seq(0,1000, by=50)
+K[1] <- 1 # Minimum K is 1
+
+k <- log(K)
+Tbar <- (K^(2*c)-1-(2*c*k))/(2*mu*c) # From equation 4.4
+Tbar2 <- (K^(2*c)-1-(2*c*k))/(2*-0.1*c) # From equation 4.4
+
+plotdf <- data.frame(K=rep(K,2), Tbar=c(Tbar,Tbar2), 
+                     mu=c(rep('0.1',length(K)),rep('-0.1',length(K))))
+
+ggplot(data=plotdf, aes(x=K, y=Tbar, color=mu))+
+  geom_line()
+  
+# plot(Tbar2~K, type='l', add=T)
+```
+
+```{r}
+# Plot mean time of extinction vs. Nc for population
+K <- 200
+Nc <- seq(0,200,by=10)
+Nc[1] <- 1
+k <- log(K)
+d <- log(Nc)
+Tbar <- (exp(2*c*k)*(1-exp(-2*c*d))-2*c*d)/(2*mu*c)
+
+plot(Tbar~Nc, type='l')
+```
+
+Issues with the ceiling model - assumption that populationg rwoth below the ceiling is density independent - introduced to allow expressions for mean time to extinction (TBar) to be calculated. 
+But the onset is usually not realistic for actual populations. 
+
+## PVA for population with negative density dependence - Bay Checkerspot Butterfly
+
+Number of female butterflies taken from 27 censuses. 
+They undergo massive population fluctuations over the 27 years. 
+
+```{r}
+census.years <- 1960:1986
+c.census.data <- c(90,
+                 175,
+                 40,
+                 45,
+                 175,
+                 200,
+                 425,
+                 425,
+                 800,
+                 256,
+                 713,
+                 198,
+                 1819,
+                 575,
+                 567,
+                 1819,
+                 7227,
+                 852,
+                 216,
+                 244,
+                 267,
+                 1753,
+                 999,
+                 1788,
+                 143,
+                 79,
+                 94)
+
+h.census.data <- c(70,
+                   350,
+                   750,
+                   750,
+                   1400,
+                   2000,
+                   1750,
+                   900,
+                   576,
+                   871,
+                   820,
+                   235,
+                   1149,
+                   370,
+                   177,
+                   317,
+                   1001,
+                   190,
+                   341,
+                   135,
+                   125,
+                   316,
+                   109,
+                   122,
+                   31,
+                   48,
+                   18
+                   )
+```
+
+Test for density dependence and identify the best model.
+We can look for a negative relationship between log population growth rate and population size to test for this, and see what relationship (i.e. Theta sign) best fits the data using an information criterion approach.
+
+In this context, **likelihood is the probability of obtaining the observed set of data given a particular set of parameter values in a particular model**.
+For reasons of computational accuracy, it is generally better to calculate the log of likelihood. 
+Max log likelihood is observed when the values of the parameters that have the highest probability of generating the observed data are used in the model. 
+This indicates good support for the parameters - support is higher for models with *higher* likelihoods and *fewer* parameters.
+
+We will take three steps:
+
+1. Fit three models to the data with nonlinear least-squares regression of the log population growth rate against N in each census
+2. Compute the max. log likelihood of each model using the least squares estimates of the parameters and the residual variance
+3. Calculate information criterion for each of the three models, use them to describe which model best describes the data
+
+```{r}
+# Calculate log growth rate 
+c.loggrowth <- log(c.census.data[2:length(c.census.data)]/c.census.data[1:length(c.census.data)-1])
+h.loggrowth <- log(h.census.data[2:length(h.census.data)]/h.census.data[1:length(h.census.data)-1])
+
+### The first SAS program to fit the Bay checkerspot census data
+# r <- seq(0.5, 1.5, by=0.5)
+# K <- seq(200, 800, by=200)
+# theta <- seq(0.2, 1, by=0.4)
+
+# In SAS, nonlinear least-squares regression must be supplied with derivatives of the function to be fit to the data with respect to each parameter in the model
+density.ind <- nls(c.loggrowth~r.est)
+# 0.001673
+theta.starts <- list(r=0.5, K=200, theta=0.2)
+density.theta <- nls(c.loggrowth~r*(1-(c.census.data[1:length(c.loggrowth)]/K)^theta), start = theta.starts)
+
+ricker.starts <- list(r=0.5, K=200)
+density.ricker <- nls(c.loggrowth~r*(1-(c.census.data[1:length(c.loggrowth)]/K)), start = ricker.starts)
+```
+Now let's look at the model results
+```{r}
+print('Density independent model');
+summary(density.ind);
+print('Theta model');
+summary(density.theta);
+print('Ricker model');
+summary(density.ricker)
+```
+
+We now calculate the log-likelihood of each model with:
+$$log L = \frac{-q}{2} log(2 \pi V_r) - \frac{1}{2V_r} \sum^q_{t=1}[log(\frac{N_{t+1}}{N_t})-P_t]^2 $$
+where $P_t$ is the log population growth predicted by the model in each year t, *q* is the number of measurements in the log-population growth rate, and $V_r$ is the residual variance calculated in Step 1. 
+
+
+```{r}
+# Calculate sum of squares and degrees of freedom (df) in each model
+density.ind.ss <- sum((summary(density.ind)$residuals)^2)
+density.theta.ss <- sum((summary(density.theta)$residuals)^2)
+density.ricker.ss <- sum((summary(density.ricker)$residuals)^2)
+
+density.ind.df <- sum(summary(density.ind)$df)
+density.theta.df <- sum(summary(density.theta)$df)
+density.ricker.df <- sum(summary(density.ricker)$df)
+
+density.ind.vr <- density.ind.ss/density.ind.df
+density.theta.vr <- density.theta.ss/density.theta.df
+density.ricker.vr <- density.ricker.ss/density.ricker.df
+
+density.ind.p <- nrow(summary(density.ind)$coefficients)+1
+density.theta.p <- nrow(summary(density.theta)$coefficients)+1
+density.ricker.p <- nrow(summary(density.ricker)$coefficients)+1
+
+# Calculate the maximum log likelihood of each model
+maxLL <- function(q,V){
+  max.ll <- (q/-2)*(log(2*pi*V)+1)
+  return(max.ll)
+}
+
+# Calculate maximum likelihood according to residual variance (.vr) and degrees of freedom (q, .df)
+# These values are negative because they are the log- of a small number <1, the probability of data | parameters, model
+maxLL.ind <- maxLL(q=density.ind.df, V=density.ind.vr)
+maxLL.theta <- maxLL(q=density.theta.df, V=density.theta.vr)
+maxLL.ricker <- maxLL(q=density.ricker.df, V=density.ricker.vr)
+```
+
+Now, calculate AICc - the corrected AIC criterion.
+```{r}
+# Calculate the corrected AIC criterion (more appropriate in cases where the number of estimated parameters is similar to the number of datapoints, usually the case in PVA)
+
+calcAICc <- function(lmax, p, q){
+  aic.c <- -2*lmax+(2*p*q/(q-p-1))
+  return(aic.c)
+}
+
+# q is the df, as before, and p is the number of parameters being estimated (plus Vr) using least-squares estimation
+aic.ind <- calcAICc(lmax=maxLL.ind, p=density.ind.p, q=density.ind.df)
+aic.theta <- calcAICc(lmax=maxLL.theta, p=density.theta.p, q=density.theta.df)
+aic.ricker <- calcAICc(lmax=maxLL.ricker, p=density.ricker.p, q=density.ricker.df)
+```
+
+To calculate AIC weights:
+$$ w_i =  \frac{exp[-0.5(AIC_{c,i}-AIC_{c,best})]}{\sum^R_{i=1} exp[-0.5(AIC_{c,i} - AIC_{c,best})]}$$
+
+```{r}
+calcAICweight <- function(aic, aic.best){
+  weights <- data.frame(aic=aic, w=NaN)
+  denominator <- sum(exp(-0.5*(aic-aic.best)))
+  for(i in 1:length(aic)){
+    numerator <- exp(-0.5*(aic[i]-aic.best))
+    weights[i,2] <- numerator/denominator
+  }
+  return(weights)
+}
+
+aic.list <- c(aic.ind, aic.theta, aic.ricker)
+weights <- calcAICweight(aic.list, aic.best = min(aic.list))
+weights$model <- c('Ind','Theta','Ricker')
+weights
+```
+
+### Estimating extinction risk for the density-dependent checker-spot butterfly population in JRC bay
+
+We now simulate the population size at one-year intervals, using the Ricker model (as it was most supported by non-linear least squares likelihood estimation). 
+Simulate each year by randomly sampling the error term, $\epsilon$ - drawn from a normal distribution with mean=0 and SD influenced by $V_r$. 
+The variance in $\epsilon$ is the environmentally-driven variation in the log population growth rate, $\sigma^2$. 
+
+However, $V_r$ is a biased estimate of environmental variance (smaller than reality), especially if the number of censused years is small and much variation is unobserved.
+An unbiased estimate of $\sigma^2$ is given by 
+$$ \hat{\sigma}^2 = \frac{qV_r}{q-1} $$
+
+```{r}
+sigma_hat <- (density.ricker.df*density.ricker.vr)/(density.ricker.df-1)
+```
+We can sample values from a normal distribution with a mean=0 and variance=1 (the standard sampling method in `rnorm`) and multiply it by $\sqrt{\hat{\sigma}^2}$ to get random values with mean=0 and variance=$\hat{\sigma}^2$. 
+
+Now we can simulate the population under the Ricker model with random environmental variation. 
+```{r}
+# This function calculates the probability that a population following the Ricker curve with a starting population Nc falls below the Nx threshold
+#    by time Tmax
+
+theta_logistic_stoch <- function(r, K, theta, sigma2, Nc, Nx, tmax, nReps){
+  sigma <- sqrt(sigma2)
+  set.seed(12345) # Not necessary, only sets the random number generator's seed
+  
+  # Create a dataframe with columns rep, for the iteration, t, the year, and pop, Nt 
+  popsize <- expand.grid(nRep=1:nReps,t=1:tmax)
+  popsize$pop <- NaN
+  
+  # Set the first year of each rep to Nc
+  popsize$pop[which(popsize$t==1)] <- Nc
+  
+  for(interval in 2:tmax){
+    print(paste0('Year: ',interval))
+    nt <- popsize$pop[which(popsize$t==(interval-1))]
+    nt.1 <- nt*exp(r*(1-(nt/K)^theta) + sigma*rnorm(length(nt)))
+    # Any population that falls below the extinction threshold is given NaN for extinction
+    nt.1[which(nt.1<=Nx)] <- NaN 
+    popsize$pop[which(popsize$t==interval)] <- nt.1
+  }
+  return(popsize)
+}
+
+# Now run the function to simulate the Ricker population growth model and its parameter estimates
+ricker.sim.nx30 <- theta_logistic_stoch(r=summary(density.ricker)$coefficients[1],
+                                   K=summary(density.ricker)$coefficients[2],
+                                   theta=1,
+                                   sigma2=sigma_hat,
+                                   Nc=94,
+                                   Nx=30,
+                                   tmax=20,
+                                   nReps=50000)
+ricker.sim.nx20 <- theta_logistic_stoch(r=summary(density.ricker)$coefficients[1],
+                                   K=summary(density.ricker)$coefficients[2],
+                                   theta=1,
+                                   sigma2=sigma_hat,
+                                   Nc=94,
+                                   Nx=20,
+                                   tmax=20,
+                                   nReps=50000)
+
+ricker.sim.nx20$nx <- 20
+ricker.sim.nx30$nx <- 30
+
+ricker.sim <- rbind(ricker.sim.nx20, ricker.sim.nx30)
+
+prob.extinct <- ricker.sim %>% 
+  group_by(t,nx) %>% 
+  summarize(extinct=sum(is.na(pop))) %>% 
+  mutate(prob.ext=extinct/50000)
+
+ggplot(data=prob.extinct, aes(x=t,y=prob.ext,color=as.factor(nx)))+
+  geom_line()+
+  xlab('Time (years)')+
+  ylab('Cumulative probability of extinction')
+```
+The probability of extinction is relatively low, and doesn't reach 40% until ~20 years from now. *But the population actually went extinct in 1996, 10 years after the last census.* 
+
+The JRH population went extinct earlier! M+D suggest that we repeat the analysis with the new population:
+```{r repeated.analysis.jrh}
+density.ind <- nls(h.loggrowth~r.est)
+# -0.05224
+theta.starts <- list(r=0.5, K=200, theta=0.2)
+density.theta <- nls(h.loggrowth~r*(1-(h.census.data[1:length(h.loggrowth)]/K)^theta), start = theta.starts)
+
+ricker.starts <- list(r=0.5, K=200)
+density.ricker <- nls(h.loggrowth~r*(1-(h.census.data[1:length(h.loggrowth)]/K)), start = ricker.starts)
+
+print('Density independent model (JRH)');
+summary(density.ind);
+print('Theta model (JRH)');
+summary(density.theta);
+print('Ricker model (JRH)');
+summary(density.ricker)
+```
+
+
+```{r}
+# Calculate sum of squares and degrees of freedom (df) in each model
+density.ind.ss <- sum((summary(density.ind)$residuals)^2)
+density.theta.ss <- sum((summary(density.theta)$residuals)^2)
+density.ricker.ss <- sum((summary(density.ricker)$residuals)^2)
+
+density.ind.df <- sum(summary(density.ind)$df)
+density.theta.df <- sum(summary(density.theta)$df)
+density.ricker.df <- sum(summary(density.ricker)$df)
+
+density.ind.vr <- density.ind.ss/density.ind.df
+density.theta.vr <- density.theta.ss/density.theta.df
+density.ricker.vr <- density.ricker.ss/density.ricker.df
+
+density.ind.p <- nrow(summary(density.ind)$coefficients)+1
+density.theta.p <- nrow(summary(density.theta)$coefficients)+1
+density.ricker.p <- nrow(summary(density.ricker)$coefficients)+1
+
+# Calculate maximum likelihood according to residual variance (.vr) and degrees of freedom (q, .df)
+# These values are negative because they are the log- of a small number <1, the probability of data | parameters, model
+maxLL.ind <- maxLL(q=density.ind.df, V=density.ind.vr)
+maxLL.theta <- maxLL(q=density.theta.df, V=density.theta.vr)
+maxLL.ricker <- maxLL(q=density.ricker.df, V=density.ricker.vr)
+```
+
+Now, calculate AICc - the corrected AIC criterion.
+```{r}
+# Calculate the corrected AIC criterion (more appropriate in cases where the number of estimated parameters is similar to the number of datapoints, usually the case in PVA)
+aic.ind <- calcAICc(lmax=maxLL.ind, p=density.ind.p, q=density.ind.df)
+aic.theta <- calcAICc(lmax=maxLL.theta, p=density.theta.p, q=density.theta.df)
+aic.ricker <- calcAICc(lmax=maxLL.ricker, p=density.ricker.p, q=density.ricker.df)
+```
+
+To calculate AIC weights:
+$$ w_i =  \frac{exp[-0.5(AIC_{c,i}-AIC_{c,best})]}{\sum^R_{i=1} exp[-0.5(AIC_{c,i} - AIC_{c,best})]}$$
+
+```{r}
+aic.list <- c(aic.ind, aic.theta, aic.ricker)
+weights <- calcAICweight(aic.list, aic.best = min(aic.list))
+weights$model <- c('Ind','Theta','Ricker')
+weights
+
+# This time, it suggests a independent model
+```
+
+```{r}
+sigma_hat <- (density.ind.df*density.ind.vr)/(density.ind.df-1)
+
+density_ind <- function(r,sigma2, Nc, Nx, tmax, nReps){
+  sigma <- sqrt(sigma2)
+  set.seed(12345) # Not necessary, only sets the random number generator's seed
+  
+  # Create a dataframe with columns rep, for the iteration, t, the year, and pop, Nt 
+  popsize <- expand.grid(nRep=1:nReps,t=1:tmax)
+  popsize$pop <- NaN
+  
+  # Set the first year of each rep to Nc
+  popsize$pop[which(popsize$t==1)] <- Nc
+  
+  for(interval in 2:tmax){
+    print(paste0('Year: ',interval))
+    nt <- popsize$pop[which(popsize$t==(interval-1))]
+    nt.1 <- nt*exp(r + sigma*rnorm(length(nt)))
+    # Any population that falls below the extinction threshold is given NaN for extinction
+    nt.1[which(nt.1<=Nx)] <- NaN 
+    popsize$pop[which(popsize$t==interval)] <- nt.1
+  }
+  return(popsize)
+}
+
+# Now run the function to simulate the Ricker population growth model and its parameter estimates
+ind.sim.nx10 <- density_ind(r=summary(density.ind)$coefficients[1],
+                                   sigma2=sigma_hat,
+                                   Nc=18,
+                                   Nx=10,
+                                   tmax=20,
+                                   nReps=50000)
+ind.sim.nx15 <- theta_logistic_stoch(r=summary(density.ricker)$coefficients[1],
+                                   K=summary(density.ricker)$coefficients[2],
+                                   theta=1,
+                                   sigma2=sigma_hat,
+                                   Nc=18,
+                                   Nx=15,
+                                   tmax=20,
+                                   nReps=50000)
+
+ind.sim.nx10$nx <- 10
+ind.sim.nx15$nx <- 15
+
+ind.sim <- rbind(ind.sim.nx10, ind.sim.nx15)
+
+prob.extinct <- ind.sim %>% 
+  group_by(t,nx) %>% 
+  summarize(extinct=sum(is.na(pop))) %>% 
+  mutate(prob.ext=extinct/50000)
+
+ggplot(data=prob.extinct, aes(x=t,y=prob.ext,color=as.factor(nx)))+
+  geom_line()+
+  xlab('Time (years)')+
+  ylab('Cumulative probability of extinction')
+```
+
+
+Compared to the density independent model, the Ricker model predicts about 50% the probability of extinction. 
+This is because the independent model fails to account for compensation in population growth rates at low population sizes.
+Also, by failing to recognize that some variation in $log(N_{t+1}/N_t)$ is due to density dependence, **not environmental stochasticity!**. 
+Higher variability = greater extinction risk. 
+
+That said, the comparison is still valid - the JRH population went extinct first even with a lower $N_x$ of 10 or 15 instead of the JRC's 20.
+
+Note that this **does not take into account uncertainty in parameter estimates**. It is more time consuming but feasible. 
+
+### Positive density dependence/Allee effects
+Evidence of population-level Allee effects is extremely weak - demographic models can better incorporate density-dependent effects on survival or reproduction than in count-based models.
+
+Let's assume that the larger a population becomes, the greater the chance that each individual can find a mate.
+The offspring produced per individual, $O_t$ is:
+$$ O_t = e^r N_t / (A+N_t) $$
+where $A$ is the population size at which **potential per-capita reproduction is half its max value**, and controls the population size at which Allee effects are felt. 
+When $N_t$ is close to zero, so is reproduction; when $N_t$ becomes large relative to $A$, i.e., $N_t + A \approx N_t$, it approaches $e^r$. 
+
+The number of *potential offspring* are not actually produced - the production and survival of offspring is assumed to still follow density-dependence such that the fraction of realized production is $e^{-\beta N_t}$, where $\beta$ is the strength of negative density dependence.
+
+$$N_{t+1} = O_t e^{-\beta N_t}N_t = \frac{N_t^2}{A+N_t}e^{r-\beta N_t} $$
+Stochasticity can be added to the model
+$$N_{t+1} = O_t e^{-\beta N_t}N_t = \frac{N_t^2}{A+N_t}e^{r-\beta N_t + \epsilon_t} $$
+We can test for an Allee-type model in JRC using the same procedure as before:
+```{r}
+allee.starts <- list(r=0.1, b=0.1, A=10)
+allee.lower <- list(r=0, b=0, A=0)
+density.allee <- nls(c.loggrowth~log(c.census.data[1:length(c.loggrowth)])-log(A+c.census.data[1:length(c.loggrowth)])+
+                       r-b*c.census.data[1:length(c.loggrowth)], start = allee.starts, lower=allee.lower,
+                     algorithm = 'port') # Necessary to set a lower bound on A, which otherwise becomes negative!
+
+density.allee
+```
+`A`'s MLE is zero, which reduces to the Ricker function anyway. 
+
+## Combined effects of demographic and environmental stochasticity
+
+It is not possible to estimate the magnitude of demographic stochasticity using only count data - we need data on survival and reproduction typically used in demographic models.
+Sometimes, it is useful to use a *tandem approach* where count-based data and demographic data are used together for an intensely studied population. 
+
+There is a way to separate the effects of demographic and environmental stochasticity (from Engen et al. 1998)
+
+1. Collect data on marked individuals for several years - # offspring, offspring survival, parental survival
+2. Calculate contribution of each individual ($C_{it}$) to the next year's $N_t$ (e.g. if 5 offspring and parent survives, contribution is **6**)
+
+$$ \bar{C_t} = \frac{\sum^{m_t}_{i=1}C_{it}}{m_t}$$
+where $m_t$ = number of individuals whose contributions to the next year are known. 
+
+3. Estimate demographic variance in year $t$, **the variation among individuals in the same year**:
+
+$$ V_{d, t} = \frac{1}{m_t - 1} \sum^{m_t}_{i=1}(C_it - \bar{C_t})^2 $$
+
+4. Regress demographic variance against population size $N_t$ to identify density dependence
+5. Use census data and demographic variance in each year to calculate environmental stochasticity in each year:
+
+$$ \sigma^2_t = \Big[\frac{N_{t+1}}{N_t} - f(N_t) \Big]^2 - \frac{V_{d,t}}{N_t} $$
+where $f(N_t)$ is the possibly density-dependent population growth rate in year $t$ predicted by the best-fit population model $N_{t+1}=N_t \times f(N_t)$. 
+The portion in the square brackets is the squared deviation between the observed and predicted growth rate in the model from $t$ to $t+1$. 
+This can then be regressed against population size to find any density dependence in environmental variation (e.g. large populations may leave scarce refuges, making environmental perturbation more impactful).
+
+This equation predicts that demographic stochasticity will weaken as $N_t$ increases.
+
+### Example
+Let's assume that both environmental and demographic stochasticity had significant linear regressions with $N_t$:
+
+$ V_d(T) = a_d N_t + b_d$ and $\sigma^2 (t) = a_e N_t + b_e $
+Let's also assume that $\lambda(N_t)$, the density-dependent growth rate, is lognormally distributed. The mean is given by the theta-logistic model ($mean(\lambda_t) = exp(r[1-(N_t/K)^\theta]))$ and variance $V(\lambda_t) = \sigma^2 (t) + V_d(t)/N_t$, the sum of components of environmental and demographic stochasticity.
+
+We can create random values for $\lambda(N_t)$ by computing values of $exp(X_t)$ where $X_t$ is normally distributed with mean $log(mean(\lambda)) - \frac{1}{2}V(X_t)$ and $V(X_t) = log \Big[ 1+V(\lambda_t)/mean(\lambda_t)^2 \Big]$
+
+```{r box 4.5}
+# This function simulates the growth of a density-dependent population with both demographic and environmental stochasticity
+demstoch <- function(r,K,theta,Nc,ad,bd,ae,be,tmax,nReps){
+  popsize <- expand.grid(nRep=1:nReps,t=1:tmax)
+  popsize$pop <- NaN
+  
+  # Set the first year of each rep to Nc
+  popsize$pop[which(popsize$t==1)] <- Nc
+  
+  for(interval in 2:tmax){
+    print(paste0('Year: ',interval))
+    nt <- popsize$pop[which(popsize$t==(interval-1))]
+    
+    # Compute means of lambdas
+    mlam <- exp(r*(1-(nt/K)^theta))
+    
+    # Variance in lambdas
+    vlam <- ((ad*nt+bd)/nt) + (ae*nt+be)
+    
+    # Coefficient of variation in lambdas
+    cv2 <- vlam/(mlam^2)
+    
+    mx <- log(mlam)-0.5*log(cv2+1)
+    sdx <- sqrt(log(cv2+1))
+    nt.1 <- nt*exp(mx+(sdx*rnorm(length(nt)))) 
+    popsize$pop[which(popsize$t==interval)] <- nt.1
+  }
+  return(popsize)
+}
+
+dem.env.ex <- demstoch(r=0.1,K=15, theta=1, Nc=10, ad=0, bd=1, ae=0, be=0.1, tmax=50, nReps=10)
+
+# Choose pretty breaks 
+base_breaks <- function(n = 10){
+    function(x) {
+        axisTicks(log10(range(x, na.rm = TRUE)), log = TRUE, n = n)
+    }
+}
+
+# Plot Nt vs t, with log-y axis
+allee.plot <- ggplot(data=dem.env.ex, aes(y=pop, x=t, group=nRep, color=nRep)) +
+  geom_line() +
+  scale_y_continuous(trans='log10', breaks=base_breaks()) +
+    ggtitle(label='Allee effects')
+```
+Compare with
+```{r}
+dem.env.ex2 <- demstoch(r=0.1,K=15, theta=1, Nc=10, ad=0, bd=0.1, ae=0, be=0.1, tmax=50, nReps=10)
+
+# Plot Nt vs t, with log-y axis
+no.allee.plot <- ggplot(data=dem.env.ex2, aes(y=pop, x=t, group=nRep, color=nRep)) +
+  geom_line() +
+  scale_y_continuous(trans='log10', breaks=base_breaks()) + 
+  ggtitle(label='Minimal Allee effects')
+
+grid.arrange(no.allee.plot+theme(legend.position = 'None'), 
+             allee.plot+theme(legend.position = 'None'), 
+             ncol=2)
+```
+
+Note that the Allee effects behave much like the extinction threshold - once the population falls below a certain level, it is more or less 'doomed'. 
+
+**Assumption of the Allee effect model:**
+
+All variation among individuals in their contribution to population growth in a single year is due to random chance not inherent/genotypic/age/size/habitat-based factors, i.e. all individuals have identical **expected contribution** to population growth.
+
+Inter-individual differences will be interpreted as demographic stochasticity, and inflate the risk of population extinction at low population sizes. 
+Aside from this, this method allows us to consider the effect of both environmental and demographic stochasticity individually. 
+
+## Environmental autocorrelation
+Temporal autocorrelation is likely to impact environmental stochasticity. 
+Environmental stochasticity may have an effect for multiple years - population size, age, or stage structure of a population can change long-term following even uncorrelated environmental events (e.g. by reducing the reproductive proportion of the adult population).
+At the same time, correlated environmental conditions may cancel each other out, minimizing the impacts on survival/reproduction. 
+
+Census data cannot disentangle autocrrelation in population growth rates that are due to environmental autocorrelation vs. interactions between the environment and population that cause autocorrelated changes in population structure. 
+Both effects fall under the umbrella of *environmental autocorrelation*. 
+
+**Positive correlations** - adjacent years tend to be more similar than would be expected by random chance
+
+**Negative correlations** - adjacent years differ more than would be expected by chance (not many compelling examples of this in nature)
+
+In a **density-independent model**, + autocorr increases extinction risk (strings of bad years are less likely to be broken up by good years that cna pull back from extinction).
+The effective environmental variance on the log population growth rate is $\big[(1+\rho)/(1-\rho)\big] \sigma^2$, where $\rho$ is the correlation coefficient between environemtnal effects on pop. growth in adjacent years and $\sigma^2$ is the environmental variance estimated in Chapter 3. 
+**When $\rho$ is positive, effective environmental variance is greater than $\sigma^2$ **. 
+
+To include autocorrelated effects in, e.g. the density independent model:
+
+$$N_{t+1} = e^{\mu + \epsilon_t} N_t$$
+$\epsilon_t = \rho \epsilon_{t-1} + \sqrt{\sigma^2}\sqrt{1-\rho^2}z_t$, where $z_t$ is a random number drawn from a standard normal distribution.
+
+In **density dependent** models (i.e. those with negative density dependence) things are more complicated - + autocorr can either increase or decrease extinction risk. 
+How autocorrelated impacts population growth depends on the recruitment curve - how $N_{t+1}$ and $N_t$ relate. 
+At the equilibrium population size, if the recruitment curve is positive then positive autocorrelation will increase the risk; if negative, positive autocorrelation can decrease extinction risk over some range of values (this is sensitive to how environmental variation is entered in to the model - it can either strictly decrease or decrease then increase probability of extinction). 
+
+It is therefore impossible to make blanket statements about temporal autocorrelation in environmental variability and population extinction risk. 
+
+### Testing for environmental autocorrelation
+
+1. Calculate $log(N_{t+1}/N_t)$ using all population censuses (one less log rate than the # of censuses)
+2. Fit density-independent and -dependent models to the data, use $AIC_c$ criteria to choose the best model of population growth
+3. Use the best supported model to calculate predicted log population growth **for each year**
+4. Subtract predicted from observed log growth rates to find environmental deviations - if density-independent, this will be only the environmental deviation without demographic effects (i.e. difference between observed rate and $\mu$) - see Chapter 3 to find out how to use regression diagnostics for this
+5. Calculate the correlation between deviations in time intervals from $1:(q-1)$ and time intervals from $2: q$. Then calculate the Pearson correlation coefficient between the two sets of time intervals to find the **first-order autocorrelation**
+
+Here's an example to calculate the temporal autocorrelation in the JRC population
+```{r}
+deviates <- summary(density.ricker)$residuals
+deviates.block1 <- deviates[1:length(deviates)-1]
+deviates.block2 <- deviates[2:length(deviates)]
+
+# Calculate Pearson's correlation:
+pearson.coeff <- cor(x=deviates.block1, y=deviates.block2, method="pearson")
+pearson.coeff 
+
+# To test for significance:
+pearson.test <- cor.test(x=deviates.block1, y=deviates.block2, method="pearson")
+pearson.test
+```
+There is not significant first-order autocorrelation. 
+
+It is possible to test for higher-order autocorrelation when evidence for first-order is found. 
+However, sample size decreases with increase in the number of years between environmental deviations - requires long censuses. 
+
+If there is a significant correlation, we can introduce this by making deviations in each year tied to the previous year. 
+However, we still have to ensure that the expected variance of environmental deviation still equals $\sigma^2$ as estimated from the data:
+
+$$\epsilon_t = \rho \epsilon_{t-1} + \sqrt{\sigma^2} \sqrt{1-\rho^2}z_t$$
+
+The new random term, $z_t$ is scaled by $\sqrt{\sigma^2} \sqrt{1-\rho^2}$ to assure that theh variance of the string of $\epsilon_t$ equals $\sigma^2$.
+
+We can write a code to simulate the probability of quasi-extinction for the Ricker model:
+
+```{r}
+# This code calculates the probability of quasi-extinction with temporally autocorrelated environmental effects
+theta_logistic_autocorr <- function(r, K, theta, sigma2, Nc, Nx, tmax, rho, nReps){
+  set.seed(12345) # Not necessary, only sets the random number generator's seed
+  sigma <- sqrt(sigma2)
+  # Beta scales the new random numbers so that total environmental variance equals sigma2
+  beta <- sqrt(1-rho^2)
+  # Create a dataframe with columns rep, for the iteration, t, the year, and pop, Nt 
+  popsize <- expand.grid(nRep=1:nReps,t=1:tmax)
+  popsize$pop <- NaN
+  # Set the first year of each rep to Nc
+  popsize$pop[which(popsize$t==1)] <- Nc
+  for(interval in 2:tmax){
+    print(paste0('Year: ',interval))
+    nt <- popsize$pop[which(popsize$t==(interval-1))]
+    # Skip the creation of eold (not necessary), make enew here
+    enew <- rho*rnorm(length(nt))+sigma*beta*rnorm(length(nt))
+    # Use the ricker model to project ahead
+    nt.1 <- nt*exp(r*(1-(nt/K)^theta) + enew)
+    
+    # Any population that falls below the extinction threshold is given NaN for extinction
+    nt.1[which(nt.1<=Nx)] <- NaN 
+    popsize$pop[which(popsize$t==interval)] <- nt.1
+  }
+  return(popsize)
+}
+
+autocorr.ex <- theta_logistic_autocorr(r=0.8, K=10, theta=1, sigma2=0.05, Nc=10, Nx=5, tmax=50, rho=0.1, nReps=10000)
+
+# Calculate the number of NaNs by the last year of simulation, t=50
+last.year <- autocorr.ex[which(autocorr.ex$t==50),]
+prob.ext <- (sum(is.na(last.year$pop)))/(nrow(last.year))
+# 0.1863
+
+# Plot the trajectories of 20 random samples
+autocorr.plot <- ggplot(data=autocorr.ex[which(autocorr.ex$nRep %in% sample(10000, size=20, replace=F)),], aes(y=pop, x=t, group=nRep, color=nRep)) +
+  geom_line() +
+#  scale_y_continuous(trans='log10', breaks=base_breaks()) + 
+  ggtitle(label='Environmental autocorrelation')
+
+autocorr.plot
+```
+
+## Catastrophes and bonanzas
+
+Both are likely to exert a range of effects on population growth, although including these events in PVAs can be difficult or indefensible. 
+We can randomly select some years to be 'typical' or 'extreme' based on long-term frequency of these events.
+But censuses of threatened and endangered species are almost always too short in duration to see more than one or two extreme events, if any, so we have too little information to construct a distribution for the severity of bonanzas and catastrophes. 
+
+It is better to use actual severities observed in the data (or estimates from other populations or related species) rather than incorporating a distribution of severities without empirical evidence. 
+
+Another problem - to include either catastrophes or bonanzas or both. 
+For example, in our 38 year grizzly dataset, we only observed a bonanza (unusually large increase in population from 1983-84, but did not observe a catastrophe).
+If we assume that *either* bonanzas or catastrophes happen every 38 years, we would not be surprised to see no catastrophes even though we accept that they occur.
+In this case, it is a good idea to run models that cover both possibilities - bonanzas alone, and bonanzas with catastrophes. 
+In other words, run one model with only observed events (e.g. if the data show one bonanza and two catastrophes, draw the magnitudes of extreme events from these three possibilities).
+Then, run another model in which bonanzas and catastrophes are equally likely over the long run (e.g. by duplicating the single bonanza in the set of extreme values that the simulation chooses from). 
+
+If there are no observed catastrophes/bonanzas, it is justifiable to estimate the magnitude of the unobserved catastrophe or bonanza from the magnitude of the observed boom or bust; i.e. if only a bonanza was seen, assume the catastrophe is equally influential - **it is not implausible for the population growth rate to occasionally drop as far below average as it has been seen to climb** and vice versa. 
+
+For example, the log-population growth rate for bears in 1983-84 is 0.2683, a 31% increase in one year. 
+The mean is 0.01467. 
+The catastrophic log growth rate is the mean minus the amount of deviation between the mean and the bonanza: $0.01467-(0.2683-0.01467) = -0.2390$. 
+
+### Example of coding catastrophes and bonanzas
+Our time series is split into typical and atypical years - each with a probability. 
+Typical years have a population growth rate drawn from a lognormal distribution; atypical years' growth rates are stored in the `outliers` vector and drawn at random. 
+
+```{r box4.7}
+theta_logistic_catbon <- function(mu, sigma2, Nc, Nx, tmax, probout, outliers, nReps){
+  set.seed(12345) # Not necessary, only sets the random number generator's seed
+  sigma <- sqrt(sigma2)
+
+  # Create a dataframe with columns rep, for the iteration, t, the year, and pop, Nt 
+  popsize <- expand.grid(nRep=1:nReps,t=1:tmax)
+  popsize$pop <- NaN
+  # Set the first year of each rep to Nc
+  popsize$pop[which(popsize$t==1)] <- Nc
+  numout <- length(outliers)
+  for(interval in 2:tmax){
+    print(paste0('Year: ',interval))
+    nt <- popsize$pop[which(popsize$t==(interval-1))]
+    # For each replicate in each year, calculate whether the year is typical or extreme
+    probs <- runif(n=length(nt))
+    typical <- probs>probout
+    # Differentiate between typical and atypical years
+    lambdas <- rep(NaN, length(nt))
+    # Calculate typical lambdas
+    lambdas[typical] <- exp(mu+sigma*rnorm(n=sum(typical)))
+    # Calculate atypical lambdas
+    lambdas[!typical] <- sample(outliers, size=sum(!typical), replace=T)
+    # print(length(lambdas))
+    
+    # Calculate next year's population size
+    nt.1 <- nt*lambdas
+    
+    # Any population that falls below the extinction threshold is given NaN for extinction
+    nt.1[which(nt.1<=Nx)] <- NaN 
+    popsize$pop[which(popsize$t==interval)] <- nt.1
+  }
+  return(popsize)
+}
+
+catbon.ex <- theta_logistic_catbon(mu=0.01467, sigma2=0.01167, 
+                                   Nc=99, Nx=20, tmax=20,
+                                   probout=1/38, 
+                                   outliers=c(0.7875, 1.3077), 
+                                   nReps=1000000)
+
+last.year <- catbon.ex[which(catbon.ex$t==20),]
+prob.ext <- (sum(is.na(last.year$pop)))/(nrow(last.year))
+# 0.000121
+```
+
+But what if common extreme events? 
+The usual assumption of normally distributed log growth rates may not be a good description of the true variation - especially for short-lived species in highly variable environments. 
+
+More realistic predictions of extinction probabilities can sometimes be generated by using observed growth rates themselves rather than trying to estimate mean/variance for growth rate and drawing them from a normal distribution. 
+This is easier for density independent populations; here's how to proceed:
+
+1. Test for density dependence
+2. If it is density-independent, use the methods in Chapter 3 to remove outliers
+3. Use Lilliefors test to determine if the remaining log pop growth rates are normall distributed (evaluates whether the numbers came from a lognormal distribution)
+4. If there is little chance that log growth rates are normal, reject the approach of generating log growth rates with mean and variance, $\mu$ and  $\sigma^2$ - instead, draw a growth rate at random from the sample of observed rates in each year of stochastic simulation. 
+
+If density dependence is significant, test the deviations between observed and predicted log pop grwoth rates for normality. Now simulations must add to next year's log population size a random draw from **the observed deviations**, not the observed growth rates. 

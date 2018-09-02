@@ -1,0 +1,379 @@
+---
+title: "Chapter 3 - Count-Based VPAs (Density Independent Models)"
+author: Mairin Deith
+output: html_document
+---
+<!--
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{natserv vignette}
+%\VignetteEncoding{UTF-8}
+-->
+=====
+
+# Chapter 3 summary
+
+Chapter 3 of Morris and Doak's book demonstrates how temporal stochasticity can influence our ability to predict future population sizes. 
+`N` is log-normally distributed because $N_t$ is the resuilt of multiple products of $N_{t-1}$ and $\lambda$ - *results from the central limit theorem*
+
+As time continues, the standard distribution of our estimate of $N_t$ (log-transformed). 
+$$N_{t+1} = N_0 (\lambda_0 \lambda1, ... , \lambda_t)$$ 
+therefore 
+$$\lambda_G = (\lambda_0 \lambda_1, ..., )^{1/t}$$
+and if $$\mu=log \lambda_G \approx \frac{\Sigma^t_{i=1} (\lambda_i)}{t}$$
+If $\mu > 0, \lambda_G > 1$, the population will generally increase. 
+If $\mu < 0, \lambda_G < 1$
+
+$log \lambda_G$' follows a normal distribution $N(\mu, \sigma^2)$. 
+As $\sigma^2$ increases, so does the range of possible futures. 
+
+It's possible to calculate extinction risk by calculating probability species hits quasi-extinction at points between $t_0$ to $t_n$.
+This follows a **diffusion approximation**: there is an absorbing lower boundary, and as time passes the diffusive movement of particles continues to move upwards in a growing, more variable cloud. 
+
+### Assumptions of the diffusion approx:
+
+1. No catastrophes/bonanzas, environmental perturbations are small to moderate
+2. Change in N is temporally independent - no temporal autocorrelation
+3. 
+
+$\mu$ is the overall rate of rise/sink of the population, $\sigma$ is the rate of random diffusion. 
+
+The probability of hitting the quasi-extinction threshold follows described by an inverse Gaussian distribution. 
+$$g (t | \mu \sigma^2 d) = \frac{d}{\sqrt{2 \pi \sigma^2 t^3}} exp(\frac{-(d+ \mu t)^2}{2 \sigma^2 t})$$
+Where $d$ is $log N_c - log N_x$ or `log(current population size) - log(quasi-extinction threshold)`.
+
+When $\mu$ is positive, there is less area under the quasi-extinction curve. As $\sigma^2$ increases or $\mu$ decreases, the QE time decreases. 
+
+Integrating from $t_0$ to $t_x$ provides a cumulative probability distribution:
+
+$$ G(T | d, \mu, \sigma^2) = \Phi(\frac{-d-\mu T}{\sqrt{\sigma^2 T}}) + exp(\frac{-2 \mu d}{\sigma^2}) \Phi(\frac{-d+\mu T}{\sqrt{\sigma^2 T}})$$
+where $\Phi$ is the standard normal cumulative probability distribution. 
+
+Morris and Doak then describe how we can make qualitative assessments of population trajectories with $\mu$ and $\sigma^2$. 
+
+$\mu$ can be calculated with:
+$$\hat{\mu} = \frac{1}{q} \Sigma^{q-1}_{i=0} log(N_{i+1}/N_i)$$
+
+$\sigma$ can be calculated with:
+$$\hat{\sigma^2} = \frac{1}{q-1} \Sigma^{q-1}_{i=0} (log(N_{i+1}/N_i)-\hat{\mu})^2$$
+
+```{r sum.example}
+adultBearsF <- data.frame(census=1:39, year=1959:1997, females=c(44.0,47.0,46,44,46,45,46,40,39,39,42,39,41,40,33,36,34,39,35,34,38,36,37,41,39,51,47,57,48,60,65,74,69,65,57,70,81,99,99))
+adultBearsF$logF <- c(log((adultBearsF$females[-1]*1.0)/(1.0*adultBearsF$females[1:(nrow(adultBearsF)-1)])),NaN)
+
+mu.est.short <- mean(adultBearsF$logF, na.rm = T)
+sigma.est.short <- (1/38)*sum((adultBearsF$logF[1:38]-mu_est)^2)
+
+mu.est.short; sigma.est.short
+```
+
+But the linear regression method is more reliable than a simple sum - it places confidence limits on parameters and estimates PVA assumptions. 
+
+There is a caveat - *the 1 assumption of linear regression is equal variance over time*.
+In reality, we expect variance to increase in time because we are applying a diffusion approximation so variation in population change is non-uniform.
+
+If 2 censuses are separated by $t_{i+1}-t_i$, $log(N_{t+1}/N_i)$ has a variance of $\sigma^2(t_{i+1}-t_i)$.
+
+We can first standardize by dividing observations by the time interval, so that $x_i = \sqrt{t_{t+1} - t_i}$
+
+```{r}
+adultBearsF$x <- c(0,sqrt(adultBearsF$census[2:39]-adultBearsF$census[1:38]))
+```
+
+Our dependent variable is also transformed:
+
+```{r}
+adultBearsF$y <- adultBearsF$logF/adultBearsF$x
+```
+
+And fit the model:
+```{r}
+linear.regression <- lm(data=adultBearsF[2:39,], y~0+x) # 0+x ensures that our intercept is fixed at zero
+
+sm <- summary(linear.regression)
+mu.est <- sm$coefficients
+sm
+```
+```{r}
+plot(adultBearsF$y~adultBearsF$x); abline(linear.regression)
+```
+
+Our estimate of $\mu=0.02013$ isn't too far off from M+D's 0.021337.
+What about $sigma^2$?
+```{r}
+sig.est <- mean(sm$residuals^2)
+sig.est
+```
+This is our residual mean square error. 
+To find 95% confidence intervals for $\mu$:
+```{r}
+confint(linear.regression, 'x', level=0.95)
+```
+
+Again, similar but not identical to the results from M+D. 
+We need to also calculate a confidence interval for $\sigma^2$:
+```{r}
+lower.chi <- qchisq(.025, df=37)
+upper.chi <- qchisq(.975, df=37)
+
+lower.chi; upper.chi
+```
+
+```{r}
+upper.sigma <- 37*sig.est/upper.chi
+lower.sigma <- 37*sig.est/lower.chi
+
+upper.sigma; lower.sigma
+```
+
+The Durbin-Watson test for autocorrelation of residuals can be used to test an assumption of the model: that changes in `logN` are not autocorrealted.
+This can be done in R with the `dwtest` from the `lmtest` package.
+```{r, eval=F}
+library(lmtest)
+dwtest(linear.regression)
+```
+
+We do not reject the null hypothesis (that the serial autocorrelations in residuals = 0). 
+
+To assess the presence of outliers, we can look at Cook's distance graphically:
+```{r}
+library(olsrr)
+ols_plot_cooksd_chart(linear.regression)
+```
+Or studentized residuals:
+```{r}
+ols_plot_resid_stud(linear.regression)
+```
+To compare before- and after-fire population dynamics:
+```{r}
+before.fire <- adultBearsF[which(adultBearsF$year < 1988),]
+after.fire <- adultBearsF[which(adultBearsF$year >= 1988),]
+```
+```{r}
+before.lm <- lm(data=before.fire[2:nrow(before.fire),], y~0+x) # 0+x ensures that our intercept is fixed at zero
+after.lm <- lm(data=after.fire[2:nrow(after.fire),], y~0+x) # 0+x ensures that our intercept is fixed at zero
+before.sigma.est <- mean(summary(before.lm)$residuals^2)
+after.sigma.est <- mean(summary(after.lm)$residuals^2)
+
+before.sigma.est; after.sigma.est
+```
+```{r}
+var.test(after.lm, before.lm)
+```
+
+We cannot reject the null hypothesis that the true ratio of variances=1. 
+Now to do the same with $\mu$:
+```{r}
+adultBearsF$x.before <- c(before.fire$x, rep(0,nrow(adultBearsF)-nrow(before.fire)))
+adultBearsF$x.after <- c(rep(0,nrow(adultBearsF)-nrow(after.fire)),after.fire$x)
+```
+
+```{r}
+mu.fires <- lm(data=adultBearsF[2:39,], y~0+x.before+x.after)
+# mu.after <- lm(data=adultBearsF[2:39,], y~0+x.after)
+
+mu.fires$coefficients
+```
+
+There is some difference in $/mu$ before and after the fire. Is it significantly different? 
+```{r}
+t <- (mu.fires$coefficients[2]-mu.fires$coefficients[1])/
+  sqrt(sig.est*((1/29) + 1/(38-29)))
+t
+```
+
+The probability of obtaining this value if the means the same is 0.154, suggesting that there was no significant difference in $/mu$ after the fires.
+
+### Using $\mu$ and $\sigma$ estimates to calculate probability of extinction
+
+We can use a cumulative density function to create a CDF of extinction. I will copy the MATLAB code into functions to use in R:
+```{r matlab.functions}
+library(VGAM)
+# Fortunately there's an erf function in VGAM!
+
+stdnormcdf <- function(z){
+  # Calculates the standard normal cumulative dist
+  #    function. 
+  phi=0.5*(1+erf(z/sqrt(2)))
+  return(phi)
+}
+
+extcdf <- function(mu, sig2, d, tmax){
+  # Calculates the standard normal cumulativedist
+  #    function from t=0 to tmax
+  # d is log distance from the quasi-extinction
+  #    threshold
+  # Requires extcdf
+
+  g <- vector(length=tmax)
+  for(t in 1:tmax){
+    g[t] <- stdnormcdf((-d-mu*t)/sqrt(sig2*t))+
+      exp(-2*mu*d/sig2)*stdnormcdf((-d+mu*t)/sqrt(sig2*t))
+  }
+  return(g)
+}
+
+gammarv <- function(alpha, beta, n){
+  # Generates a vector of n random numbers from the
+  #   Gamma(alpha,beta) distribution
+  gamma <- vector()
+  for(i in 1:n){
+    X=0
+    k=floor(alpha)
+    g=alpha-k
+    if(k>0){
+      X=-log(prod(runif(n=k)))
+    } 
+    if(g==0){
+      gamma=c(gamma, beta*X)
+    } else {
+      a=g
+      b=1-g
+      y=1
+      z=1
+      while((y+z)>1){
+        y=runif(1)^(1/a)
+        z=runif(1)^(1/b)
+      }
+      Y=y/(y+z) # Y is a Beta(g, 1-g) random variable
+      Z=-log(runif(1)) # Z is a Gamma random var
+      gamma=c(gamma, beta*(X*Y*Z))
+    }
+  }
+  return(gamma)
+}
+
+betarn <- function(m,v,n){
+  # Generates a row vector of length n, the elements of which
+  #   are Beta random variables with mean (m) variance (v)
+  if(v==0){
+    beta=rep(1,n)
+  } else if(v>=(m*(1-m))){
+    stop('ERROR:\n   Variance of Beta too large given the mean!\n\n') 
+  } else {
+    a=m*(m*(1-m)/v-1)
+    b=(1-m)*(m*(1-m)/v-1)
+    beta=vector()
+    for(i in 1:n){
+      k1=floor(a)
+      k2=floor(b)
+      if(k1==0 & k2==0){
+        Y=1
+        Z=1
+        while((Y+Z)>1){
+          Y=runif(1)^(1/a)
+          Z=runif(1)^(1/b)
+        }
+      } else {
+        Y=gammarv(a,1,1)
+        Z=gammarv(b,1,1)
+      }
+    beta=c(beta, Y/(Y+Z))
+    }
+  }
+  return(beta)
+}
+
+chi2rv <- function(df){
+  # Generates a chi-squared random number, df = degrees of freedom
+  if(mod(df,2)==0){
+    x=-2*log(prod(runif(1,df/2)))
+  } else {
+    k=(df/2)-0.5
+    v=sum(-log(runif(n=k)))
+    y=betarn(0.5, 0.124, 1)
+    z=-log(runif(1))
+    x=2*(v+y*z)
+  }
+  return(x)
+}
+```
+`extcdf` returns a column with `tmax` rows containing probabilities that the extinction threshold will be reached by each future time. 
+
+Unlike estimates of $\mu$ and $\sigma^2$, we cannot calculate confidence intervals - have to use **parametric bootstrapping**. Non-parametric bootstrapping is when you bootstrap from the existing data (i,e, constructing a set of *q* values randomly chosen from the observed log population growth rates, then calculating $\mu$ and $\sigma^2$, as well as $\hat{G}$ when $\mu$ and $\sigma^2$ are in their confidence limits).
+
+We will use $N_c = 99$, $N_x=20$, and parameters from above in our bootstrapping procedure:
+```{r}
+mu <- 0.02134 # Use the M+D values here
+sig2 <- 0.01305
+CI_mu <- c(-0.01621, 0.05889)
+CI_sig2 <- c(0.00867, 0.02184)
+q <- 38    # Enter the number of transitions in dataset
+tq <- 30   # Length of the census (in years)
+Nc <- 99   # Current pop size
+Ne <- 20   # Enter the quasi-extinction threshold
+tmax <- 50 # Maximum year
+
+Nboot <- 500 # Number of bootstrap samples for calculating conf ints
+
+d <- log(Nc/Ne)
+SEmu <- sqrt(sig2/tq)
+Glo <- rep(1, tmax) # stores ones as upper extn probabilities
+Gup <- rep(0, tmax) # store zeros as lower extinction probabilities 
+
+set.seed(12345)
+
+Gbest <- extcdf(mu, sig2, d, tmax)
+
+parboot_res <- data.frame('t'=1:tmax, 'G.best'=Gbest, 'G.upper'=rep(NaN,tmax), 'G.lower'=rep(NaN,tmax))
+
+for(i in 1:Nboot){
+  murnd <- Inf
+  while(murnd < CI_mu[1] | murnd > CI_mu[2]){
+    murnd <- mu+SEmu*rnorm(1)
+  }
+  sig2rnd <- Inf
+  while((sig2rnd < CI_sig2[1] | sig2rnd > CI_sig2[2])==T){
+    sig2rnd <- sig2*chi2rv(q-1)/(q-1)
+  }
+  
+  G <- extcdf(murnd, sig2rnd, d, tmax)
+  
+  for(t in 1:tmax){
+    if(G[t] > Glo[t]){
+      Gup[t] <- G[t]
+    }
+    if(G[t] < Glo[t]){
+      Glo[t] <- G[t]
+    }
+  }
+}
+
+parboot_res$G.upper <- Glo
+parboot_res$G.lower <- Gup
+
+# Create a dataframe for plotting
+ggplot(parboot_res, aes(x=t)) +
+  geom_line(aes(y=G.best), size=1.2)+
+  geom_line(aes(y=G.upper), linetype="dotted")+
+  geom_line(aes(y=G.lower), linetype="dotted") +
+  # Don't forget that the y-axis is log-scale
+  scale_y_log10()+
+  xlab('Time') +
+  ylab('Cumulative probability of quasi-extinction')
+
+```
+
+## Assumptions of simple count-based PVAs
+
+Keep in mind that these assumptions are not weaknesses of the model - making the assumptions explicit is an advantage of the quantitative approaches to population viability rather than an approach based on intuition or natural history knowledge. 
+We can often determine whether violations of these assumptions are going to render our estimates of viability pessimistic or optimistic and adjust our interpretation accordingly. 
+
+1. Both $\mu$ and $\sigma^2$ are constant over time - this can occur as a result of density dependence, demographic stochasticity, and temporal trends in environment.
+Can be tested by regressing $log(N_t/N_t)$ by $N_t$ (to test for density dependence) or year (to test for temporal trends).
+Changes in $\sigma^2$ can be tested for by calculating squared deviation of $log(N_{t+1}/N_t)$ and the constant $\mu$ or yearly $\mu_t$.
+
+2. No environmental autocorrelation - the diffusion approximation and the regression used to calculate $\mu$ and $\simga^2$ assume that population growth rates over different time intervals are independent, having a common mean and variatnce but no tendency for adjacent $\lambda_t$s to be more similar to one another.
+Can test with autocorrelation tests (e.g. Durbin-Watson *t* statistic)
+
+3. No catastrophes or bonanzas - the diffusion approximation assumes incremental changes over incremental time steps, no giant leaps/bounds
+
+4. No observation error - all error observed in the population growth rates via censuses must have arisen from variation in the population growth rate i.e., it must be genuine variation and not a function of observer error.
+This can cause **more pessimistic** estimates beicause it will introduce artificial variation in the population.
+The magnitude of observation error can be assessed by repeated sampling of the same area and "ground-truthing" indirect measures of abundance. 
+Some species introduce a form of observation error by their life-history traits (e.g. species that leave a dormant seed bank can have an observed population size of zero even though there are living individuals dormant underground). 
+
+Simple PVAs are still useful in cases when we want a simple measure and are aware of the effects of the model assumptions.
+It's useful if we want to compare to another population or species who has experienced, when you want to know the general direction of the trend - i.e. positive or negative - when your data are limited. 
+**Accurate models require accurate and more data**. 
+
+Generally, you need **at least 10 censuses for this method**, and it can provide reliable estimates of direction and sign of $\mu$ and relative rankings. 

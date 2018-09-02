@@ -1,0 +1,96 @@
+---
+title: "Chapter 6 - Demographic PVAs - Using Demographic Data to Build Stochastic Projection Matrix Models"
+author: Mairin Deith
+output: html_document
+---
+
+All previous examples have assumed that all individuals are identical - but we know that they have different survival and reproductive rates (e.g. larger individuals have higher survival and reproductive rates).
+
+*Structured populations* - populations in which individuals differ in their vital rates; often classifies species into ages or stages
+
+*Population projection matrix* - the principal way to describe the viability of structured populations
+
+**Advantages**: 
+
+- More accurate for populations with individual differences
+- Help us to make more targeted management decisions based on age/stage (impossible with count-based model)
+
+**Disadvantage**
+
+- Contain more parameters, require more and different kinds of data (e.g. data from a demographic study of marked individuals)
+
+This is less of a problem for keystone, umbrella, indicator, or high profile species with lots of research attention. 
+
+## Overview of steps to build a projection matrix
+
+1. Conduct a detailed demographic study of a set of marked individuals, measure survival, reproduction (state and number) over several years
+2. Determine best state variable (age, stage, size) to classify individuals (both # of states and their boundaries)
+3. Use demographic data to estimate vital rates for each class in each year
+4. Use class-specific vital rate to build a projection population matrix (deterministic or stochastic)
+
+The vital rates we want are **survival rate** (probability of survival), **state transition/growth rate**, **fertility rate** for each stage.
+
+### Step 1. Demographic study
+
+Demographic studies require following marked individuals for several years; not census counts. 
+
+1. Mark individuals in a way that lets them be re-identified - **the markings should not influence survival or reproductive rates**, and the individuals should be representative of the entire population, i.e. randomize within the area, choose different classes of individuals through stratified random sampling
+2. Marked individuals should be censused at regular intervals - the interval will be used to calculate vital rates and project into the future, typically over 1 year - should be conducted at the time of year when individuals are most obvious but *should take into consideration timing of reproduction so that fecundity can be confidently calculated, especially in birth-pulse populations when it is best to census right after the pulse. For birth flow populations, frequent checks of potentially reproductive individuals at time points within an inter-census interval may be necessary, or DNA fingerprinting could work*.
+3. For some species (e.g. those that leave seed banks in the soil), the demographer may need to supplement above-ground census with a dormancy census. Another consideration must be juvenile dispseral - occurs over a short time period and can result in very low survival, making it difficult to identify surviving individuals
+4. Collect data for as many censuses as the researcher/funds/time allow - **if possible, build a stochastic model** with enough censuses to estimate variability in vital rates. Add new marked individuals (newborns) to account for older adults that die off.
+
+### Step 2. Establishing classes
+
+Use demographic data to decide which state variable to use as a classifying variable (often done with preliminary data in the census study) - if it is continuous, break into discrete classes. 
+There are a few ways to do this:
+
+1. Classify by sex - most matrices only consider one sex, females, as it assumes that a single male fertilizes all females or that sex ratios are similar. Sex segregated models exist but require 2 sexes worth of data. 
+2. Classify individuals by age, size, or stage - this is dictated by **practicality** (age may be difficult to ID compared to size/stage, morphological characters may be prominent - but it is possible to include multiple criteria like age AND stage, or age AND size) or **biology** (size is almost alwyas a better classifying variable than age if growth rates vary). The only requirement is that individuals *must only be in one class at a time; they are discrete*. 
+An ideal state variable is **highly correlated** for all members of that state (this is a problem with size - it doesn't accurately predict vital rates if, e.g. plants with underground storage) and it should be **quick and accurate to measure** (if repeatability of measurements is low, there is little accuracy in state-based estimates for vital rates) - should balance practicality and accuracy. 
+3. If classes are difficult to decide or if biological data are insufficient, graphical and statistical analysis of results can help - the appropriate tool depends on:
+   1. If the vital rate is binary (survive/not), discrete but non-binary (birds may fledge 1,2,3, or 4 in a nest), or nearly continuous (very fecund species vary in effectively continuous manner among individuals)
+   2. Whether the state variable is continuous (size/age) or discrete (stages)
+```{r echo=F}
+library(kableExtra)
+
+rate <- c('Survival (discrete, binary)','Reproduction (discrete, non-binary)', 'Reproduction/growth (continuous-ish)')
+classifier <- c('Age or size (continuous)', 'Stage (discrete)')
+tests <- c('Logistic regression/hazard functions', 'GLM (e.g. Poisson regression)', 'Linear, polynomial, nonlinear regression', 'Log-linear models (G-test)','Log-linear models (G-test)', 'ANOVA (or nonparametric analogs)')
+
+tests.df <- data.frame(matrix(tests, nrow=2, ncol=3))
+colnames(tests.df) <- rate
+rownames(tests.df) <- classifier
+
+kable(tests.df) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+*Note: simple logistic regression models predict steadily increasing/decreasing survival probabilities as a f'n of size/age. Logistic models can include more complex patterns like parabolic*
+
+
+If two or more classifying variables are statistically related to vital rates (according to the statistical tests in the above table), you can decide which one to use based on:
+
+- Stepwise regression to determine which feature is a better predictor of vital rates
+- Test each individually with log-linear models (although requires that continuous state variables are discretized first)
+- Assess the ability of each classifying variable to predict BOTH vital rates (fecundity and survival) - often one classifier will be a better predictor for both than the other
+- If not, use $AIC_c$ based model selection, where $AIC_c$ is summed from the log-likelihoods of both models summed together (i.e. compute AIC for each state variable and choose the one with the lowest value):
+$$ AIC_c = -2(logL_{max,s}+logL_{max,f}) + \frac{2p_s n_s}{n_s - p_s - 1} + \frac{2p_f n_f}{n_f - p_f -1 } $$
+For example, assume that a simple logistic regression predicts survival vs. age, and a linear regression predicts fertility vs. age. 
+The former regression has 2 parameters, the latter 3 (slope, intercept, residual variance). 
+$logL_{max,f}$ can be calculated from the residual sum of squares, while the $logL_{max,s}$ can be output from statistical software.
+We could then compare the calculated $AIC_c$ for the age-based model to the $AIC_c$ value for a stage-based model in which there is a quadratic regression for fertility and a hazard function for survival. 
+
+4. Set class boundaries - for an age-structured model, widths of all classes must equal the interval between censuses; for stage-based classes, classes are synonymous with stages so this determines class boundaries. 
+**Deciding the number of classes is important** - we want it to be large enough to encompass real differences in vital rates between classes (i.e. over-grouping can hide real differences) = more accurately reflects the time individuals require to advance from birth to reproduction caused by the processes of grwoth and matruation and have strong effects (e.g. if an organism takes 10 years to reproduce and we create 10 pre-reproductive classes to ensure individuals have to survive in each year from birth to reproduction; two pre-reproductive classes would result in some individuals to reproduce after 2 time intervals).
+**Too many classes can also be problematic** - there may not be many individuals in each class and we reduce sample size. 
+
+Generally speaking, start with a large number of biologically/management-relevant classes; look at scatterplots of vital rates to see any substantial inflection/alteration points, check to see if there are individuals in each class and if not, reduce the number of classes. There are more formal approaches, but they are in practice rarely used.
+
+### Step 3. Estimating vital rates
+
+#### Surival rates
+Proportion of individuals in class $i$ in the last census that are still alive at the current census. For stage-based methods, sum the number of marked individuals *regardless of their new state* and divide by total number of survivors over total number of individuals. 
+This can also be done with continuous variables - but this estimates survival for classes into which few individuals happen to fall = small sample size susceptible to variation and poor precision (can only estimate to the nearest 25%). 
+
+For age or size based models, M+D recommend a 2-stage process:
+
+1. 
