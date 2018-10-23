@@ -196,8 +196,8 @@ h.loggrowth <- log(h.census.data[2:length(h.census.data)]/h.census.data[1:length
 # theta <- seq(0.2, 1, by=0.4)
 
 # In SAS, nonlinear least-squares regression must be supplied with derivatives of the function to be fit to the data with respect to each parameter in the model
-density.ind <- nls(c.loggrowth~r.est)
-# 0.001673
+# density.ind <- nls(c.loggrowth~r.est)
+density.ind <- 0.001673
 theta.starts <- list(r=0.5, K=200, theta=0.2)
 density.theta <- nls(c.loggrowth~r*(1-(c.census.data[1:length(c.loggrowth)]/K)^theta), start = theta.starts)
 
@@ -364,8 +364,8 @@ The probability of extinction is relatively low, and doesn't reach 40% until ~20
 
 The JRH population went extinct earlier! M+D suggest that we repeat the analysis with the new population:
 ```{r repeated.analysis.jrh}
-density.ind <- nls(h.loggrowth~r.est)
-# -0.05224
+# density.ind <- nls(h.loggrowth~r.est)
+density.ind <- -0.05224
 theta.starts <- list(r=0.5, K=200, theta=0.2)
 density.theta <- nls(h.loggrowth~r*(1-(h.census.data[1:length(h.loggrowth)]/K)^theta), start = theta.starts)
 

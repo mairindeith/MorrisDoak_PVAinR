@@ -61,7 +61,7 @@ adultBearsF <- data.frame(census=1:39, year=1959:1997, females=c(44.0,47.0,46,44
 adultBearsF$logF <- c(log((adultBearsF$females[-1]*1.0)/(1.0*adultBearsF$females[1:(nrow(adultBearsF)-1)])),NaN)
 
 mu.est.short <- mean(adultBearsF$logF, na.rm = T)
-sigma.est.short <- (1/38)*sum((adultBearsF$logF[1:38]-mu_est)^2)
+sigma.est.short <- (1/38)*sum((adultBearsF$logF[1:38]-mu.est.short)^2)
 
 mu.est.short; sigma.est.short
 ```
@@ -275,7 +275,7 @@ betarn <- function(m,v,n){
 
 chi2rv <- function(df){
   # Generates a chi-squared random number, df = degrees of freedom
-  if(mod(df,2)==0){
+  if(magrittr::mod(df,2)==0){
     x=-2*log(prod(runif(1,df/2)))
   } else {
     k=(df/2)-0.5
@@ -293,6 +293,7 @@ Unlike estimates of $\mu$ and $\sigma^2$, we cannot calculate confidence interva
 
 We will use $N_c = 99$, $N_x=20$, and parameters from above in our bootstrapping procedure:
 ```{r}
+library(ggplot2)
 mu <- 0.02134 # Use the M+D values here
 sig2 <- 0.01305
 CI_mu <- c(-0.01621, 0.05889)
