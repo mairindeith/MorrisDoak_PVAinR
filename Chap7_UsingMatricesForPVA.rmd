@@ -1,0 +1,556 @@
+---
+title: "Chapter 7 - Demographic PVAs - Using Projection Matrices to Assess Population Growth and Viability"
+author: Mairin Deith
+output: html_document
+---
+<!--
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{natserv vignette}
+%\VignetteEncoding{UTF-8}
+-->
+=====
+
+The collection of demographic data (as described in the last chapter) can also be used to assess population growth that accounts for stochasticity and mean vital rates.
+
+There are two ways to look at environmental perturbations and we can introduce perturbations in two ways:
+
+1. They influence vital rates
+2. They influence elements of the demographic matrix
+
+These are not exactly equivalent because some changes to vital rates will impact multiple matrix elements. 
+
+**This chapter considers how to incorporate stochastic environmental events in the matrix element**, Chapter 8 deals with vital rates.
+Although measuring and accounting for stochastic environment effects as well as demographic stochasticity, density dependence, and catastrophes and bonanzas is easier for vital rates, it is a good idea to start working with the matrices right away to understand the maths (and it also incorporates temporal autocorrelated events).
+
+## Structured populations in a deterministic environment
+
+Each entry $a_{ij}(t)$ in the population matrix $A(t)$ gives the number of individuals in class $i$ at census $t+1$ produced on average by an individual in class $j$ at census $t$. 
+This is equivalent to the per-capita contribution of classes at one census to the next.
+
+Population vector:
+$$
+n(t)=\begin{bmatrix}
+23.5 \\
+14.2 \\
+7.3
+\end{bmatrix}
+$$
+
+The next year's population:
+$$
+n(t+1)=A(t)n(t)=\begin{bmatrix}
+23.5 \\
+14.2 \\
+7.3
+\end{bmatrix}
+\begin{bmatrix}
+0.02115 & 0.074 & 0.0846 \\
+0.563 & 0 & 0 \\
+0 & 0.563 & 0.563
+\end{bmatrix}=
+\begin{bmatrix}
+0.02115(23.5) +& 0.074(14.2)+ & 0.0846(7.3) \\
+0.563(23.5)+ & 0(14.2)+ & 0(7.3) \\
+0(23.5)+ & 0.563(14.2)+ & 0.563(7.3)
+\end{bmatrix}
+$$
+$$
+=\begin{bmatrix}
+2.1654 \\
+13.2305 \\
+12.1045
+\end{bmatrix}
+$$
+
+As populations growth *in a constant environment* the projection matrix stays the same and the population converges.
+
+$$
+n(3)=\begin{bmatrix}
+1.3403 \\
+1.1535 \\
+8.7168
+\end{bmatrix},
+n(4)=\begin{bmatrix}
+0.8511 \\
+0.7546 \\
+5.557
+\end{bmatrix},...,
+n(6)=\begin{bmatrix}
+0.3496 \\
+0.3062 \\
+2.2704
+\end{bmatrix},...,
+n(8)=\begin{bmatrix}
+0.1419 \\
+0.1250 \\
+0.9269
+\end{bmatrix}
+$$
+
+This tells us the population is declining and it converges, and that over time the numbers of individuals in each class with vary until they stabilize. 
+The total population declined at approximately 0.6389 ($\lambda_1=0.6389$, very similar to $\lambda$ in the simple deterministic nonstructured model but is *more long term, the first years may have dramatically dfferent values for $\lambda$ as a result of class changes*).
+
+The proportions of individuals stabilizes at:
+$$
+w =\begin{bmatrix}
+0.1189 \\
+0.1047 \\
+0.7764
+\end{bmatrix}
+$$
+Convergence to this stable class distribution takes longer in long-lived and iteroparous species. 
+
+### Interprerying $\lambda_1$ and $w$ as Eigenvalue and Eigenvector
+
+$\lambda_1$ = **dominant Eigenvalue**
+
+$w$ = **dominant RIGHT Eigenvector**
+
+$v$\* = **dominant LEFT Eigenvector**
+
+\* *reproductive value = the relative contribution to future population growth an individual currently in a class is expected to make*
+
+For a matrix $A$, any single number (scalar) and vector which are equal to the matrix $A$ times that scalar; $Aw = \lambda_1 w$. This happens *ONLY* when the population has reached stable convergence.
+
+```{r box 7.1 calculating eigenall}
+# The function 'eignall' calculates eigenvalues and vectors for the matrix A
+eigenall <- function(A){
+  # This returns the right eigenvectors in descending order
+  eig.a <- eigen(a)
+  # This returns the left eigenvectors (the right eigenvectors of a transposed matrix are the left eigenvectors of the untransposed)
+  eig.t <- eigen(t(a))
+  
+  right.dom.eigenvector <- eig.a$vec[,1]
+  right.dom.eignval <- eig.a$val[1]
+  
+  left.dom.eigenvector <- eig.t$vec[,1]
+  # We may need to standardize the eigenvectors to proportions so that they are more informative for w and v
+  norm.right.eigenvec <- right.dom.eigenvector/(sum(right.dom.eigenvector))
+  norm.left.eigenvec <- left.dom.eigenvector/(left.dom.eigenvector[1])
+  return(list('R.Eigenvector.w'=norm.right.eigenvec, 'L.Eigenvector.v'=norm.left.eigenvec, 'Eigenvalue.lambda'=right.dom.eignval))
+}
+ 
+# Let's try it with the A matrix in the chapter
+# note: R typically fills matrices by columns, be sure to include 'by.row=T'
+a <- matrix(data=c(0.02115,0.074,0.0846,0.563,0,0,0,0.563,0.563),nrow=3,ncol=3,byrow = T)
+a
+```
+```{r}
+eigenall(a)
+```
+
+### Eigenvalue sensitivities
+$\lambda_1$ depends on all values in the matrix; changing any one will impact it but some are more influential than others. 
+We want to know how much changes in a particular matrix element will change $\lambda_1$. 
+We do this with **eigenvalue sensitivities**. 
+
+The sensitivity of $\lambda_1$ to $a_{ij}$ (where sensitivity is $S_{ij}$) is simply the partial derivative of $\lambda_1$ with respect to $a_{ij}$:
+
+$$
+S_{ij} = \frac{\delta \lambda_1}{\delta a_{ij}} = \dfrac{v_i w_j}{\sum^s_{s=1}v_k w_k}
+$$
+
+The denominator is a constant (scalar product of two vectors) so the sensitivity of $\lambda$ to $a_{ij}$ is proportional to the fraction of individuals in the population on which the element will act.
+In other words, relative minor changes to $\lambda$ result from small changes to elements that represent a) transitions from classes that make up small proportions of the stable structure, and b) the production of individuals who only make minor contributions to future population growth. 
+
+All of these values in $v$ and $w$ are positive; therefore sensitivity will always be positive.
+```{r}
+# Function from the popbio package, https://www.rdocumentation.org/packages/popbio/versions/2.4.4/source
+eigen.analysis<-function(A, zero=FALSE){
+    ev <- eigen(A)
+    # R sorts eigenvalues in decreasing order, according to Mod(values)
+    # ususally dominant eigenvalue is first (ev$values[1]), except for imprimitive matrices with d eigenvalues of equal modulus
+    # This should work for most cases
+    lmax <- which.max(Re(ev$values))
+    lambda <- Re(ev$values[lmax])
+    lambdas <- diag(ev$values)
+    ## Damping ratio. Use second eigenvalue
+    # dr<- lambda/abs(ev$values[2])
+     ## OR  second largest magnitude in case of ties using rle - round needed for imprimitive matrices
+    dr<-rle(round(Mod(ev$values), 5))$values
+    dr<-dr[1]/dr[2]
+ 
+    W <- ev$vectors
+    w <- abs(Re(W[, lmax]))
+    ## check if matrix is singular-and output NAs rather than stop (better for loops and bootstrapping)
+    V <- try(Conj(solve(W)), silent=TRUE)
+    if (class(V) == "try-error") {
+      eigen.analysis <- list(lambda1 = lambda, stable.stage = w/sum(w),
+        sensitivities = A*NA, elasticities = A*NA, repro.value = w*NA,
+        damping.ratio = dr)
+      } else {
+        v <- abs(Re(V[lmax, ]))
+        s <- v %o% w
+        if (zero) {
+          s[A == 0] <- 0
+        }
+      e <- s * A/lambda
+      x <- dimnames(A)
+      dimnames(s) <- x
+      names(w) <- x[[1]]
+      names(v) <- x[[1]]
+      eigen.analysis <- list(lambdas = lambdas,
+                             lambda1 = lambda, 
+                             stable.stage = w/sum(w),
+                             sensitivities = s, 
+                             elasticities = e, 
+                             repro.value = v/v[1],
+                             damping.ratio = dr)
+      }
+    eigen.analysis
+}
+
+eigen.analysis(a)
+```
+
+The most sensitive matrix element is adults - class 3 birds. 
+If we could influence the matrix element at this point, it would have the largest relative effect on $\lambda$. 
+
+Note that this is only applicable if $\lambda_1$ increases with $a_{ij}$ linearly - it takes the slope at the exact value of $a_{ij}$. In reality, it may be nonlinear (see Chapter 9 for more). 
+
+## Growth and extinction risk of structured populations in variable environments
+
+The simplest way to model the growth of a structured population in a variable environment is to view projection matrices over a series of years as demographic manifestations of potential states of the environment. 
+Using a computer, we can select each matrix by random and see how the population changes over time (similar to drawing population growth rates at random). 
+
+If we have the data available to calculate autocorrelation, we can build a model with autocorrelation:
+
+1. Draw values for particular vital rates known to be dependent on one or more continuous distributed environmental variable - use this to calculate vital rates and construct a new matrix each year (requires simultaneous measures of vital rates and environmental conditions over a number of years)
+2. Directly estimate and simulate correlations in vital rates themselves
+3. Assume the environment takes on a limited number of discrete states, randomly sample the state each year (probability conditional on last year's state) - this is rarely practical given the short duration of most demographic studies of rare species. 
+
+If environmental conditions are aperiodic and uncorrelated (and if the probability of picking a particular matrix does not change over time), the environmental conditions are **independently and identically distributed**, i.d.d.
+
+```{r box 7.3 simulate growth of a structured population in iid stochastic environment}
+iidenv <- function(matrices, penv, tmax, numreps, n0){
+  # matrices = list of matrices for each year of demographic study
+  # penv is the probability that each matrix is randomly selected
+  # tmax = max time
+  # numreps = number of simulated repetitions
+  # n0 = starting population size
+  s <- sqrt(as.numeric(summary(matrices[1])[1]))
+  res.out <- matrix(NaN, ncol=numreps, nrow=s)
+
+  cumdist <- cumsum(penv)
+  Nend <- vector()
+  
+  for(i in 1:numreps){
+    n <- n0
+    for(t in 1:tmax){
+      x <- sample(x=c(1:length(matrices)), size=1, prob = penv, replace=T)
+      a <- matrices[[x]]
+      n <- a %*% n
+    }
+    res.out[,i] <- n
+  }
+  res.out
+}
+
+# Translate the matrices
+m.1985 <- matrix(c(0.4995,0,4.5782,12.1425,22.3167,50.1895,
+                   0.0004,0,0.0039,0.0102,0.0188,0.0423,
+                   0,0.4773,0.7059,0.1294,0.0831,0,
+                   0,0,0.1345,0.453,0.2079,0.2000,
+                   0,0,0,0.3235,0.6238,0.2,
+                   0,0,0,0.0647,0.0831,0.6),
+                 ncol=6, nrow=6, byrow=T)
+m.1986 <- matrix(c(0.4995,0,4.5782,12.1425,22.3167,50.1895,
+                   0.0004,0,0.0039,0.0102,0.0188,0.0423,
+                   0,0.4773,0.4995,0.2178,0.0493,0,
+                   0,0,0.2913,0.4356,0.1480,0,
+                   0,0,0,0.2722,0.444,0,
+                   0,0,0,0,0.3454,0.9994),
+                 ncol=6, nrow=6, byrow=T)
+m.1987 <- matrix(c(0.4995,0,4.4234,11.7319,21.56,48.4923,
+                   0.0003,0,0.0028,0.0073,0.0135,0.0303,
+                   0,0.4545,0.4575,0.3079,0.1425,0,
+                   0,0,0.1144,0.5544,0.1425,0.0769,
+                   0,0,0,0.0616,0.4985,0.3846,
+                   0,0,0,0,0.2137,0.5385),
+                 ncol=6, nrow=6, byrow=T)
+m.1988 <- matrix(c(0.4995,0,4.733,12.5531,23.0714,51.8867,
+                   0.0003,0,0.0028,0.0075,0.0137,0.0308,
+                   0,0.5,0.7331,0.1429,0,0,
+                   0,0,0.22,0.4286,0,0,
+                   0,0,0,0.4286,0.6154,0.1,
+                   0,0,0,0,0.3846,0.9),
+                 ncol=6, nrow=6, byrow=T)
+
+matrix.list <- list("m.1985"=m.1985,"m.1986"=m.1986,"m.1987"=m.1987,"m.1988"=m.1988)
+penv=c(0.25,0.25,0.25,0.25)
+tmax=50
+n0=matrix(c(4264,3,30,16,25,5))
+
+rep.500 <- iidenv(matrices = matrix.list, penv=c(0.25,0.25,0.25,0.25), tmax=50, n0=c(4264,3,30,16,25,5), numreps=1000)
+final.year <- colSums(rep.500)
+hist(final.year, breaks = 50)
+```
+Note the lognormal distribution. 
+
+### Estimating the stochastic log growth rate, log $\lambda_s$
+
+Just like population size is lognormally distributed in unstructured models, it is the same for matrix population models. 
+It is poorly represented by $\lambda_A$, the arithmetic mean of yearly projection matrices poorly represents population options. 
+
+The stochastic log growth rate is represented by $log \lambda_s$ (is analogous to $\mu$). It can be approximated with computer simulation and by an analytical approximation. 
+
+#### Calculation by simulation
+
+Project population growth over many years using randomly drawn matrices, calculate the total population densities in each year $N(t), N(t+1), ...$. 
+Then calculate the arithmetic mean of $log[N(t+1)/N(t)]$ over all pairs of adjacent years for an estimate of $\lambda_s$. 
+The code below esimtates $\lambda_s$ and and approximate 95% CI by using the mean and variance of 50,000 simulations. 
+We can calculate the CI because the Central Limit Theorem posits that the aritmetic mean of $log[N(t+1)/N(t)]$ is approximately normally distributed.
+
+#### Analytic approximation
+It is also possible to approximate $log \lambda_s$ based on the assumption that the variation among annual matrices is not large - this restricts the range of conditions in which the approximation will be reasonably accurate, but allows us to see how stochastic variation in matrix elements affects a population's long term growth rate than we could by means of computer simulation alone (i.e. it shows why variation in some elements is more important than in others, and illuminates the importance of covaration between the values of different matrix elements). 
+
+Tuljapurkar's approximation is (assumes the matrix elements are uncorrrelated from one year to the next, iid):
+
+$$
+log \lambda_s \approx log \bar{\lambda_1}-\frac{1}{2} \Big( \frac{\tau^2}{\bar{\lambda_1}^2} \Big)
+$$
+where 
+$$
+\tau^2 = \sum_{i=i}^s \sum_{j=i}^s \sum_{k=i}^s \sum_{l=i}^s Cov(a_{ij},a_{kl}) \bar{S}_{ij} \bar{S}_{kl}
+$$
+**Biological interpretation of these terms**:
+
+- $\bar{\lambda}_1$ = the dominant eigenvalue of the mean matrix $\bar{A}$ (probability-weighted average of each element of the estimated annual matrices; weighted by the probability that each matrix occurs in a year).
+- $\tau^2/\bar{\lambda}_1^2$ = approximation of temporal variance caused by environmental stochasticity; equivalent to non-structured $\sigma^2$
+- $\bar{S}_{ij}$ = the sensitivity of $\bar{a}_{ij}$. 
+- $Cov(a_{ij}a_{kl})$ is the covariance between matrix elements $a_{ij}$ and $a_{kl}$ (the statistical measure of the tendency to vary in synchrony, $Cov(x,y) = \frac{1}{n-1}\sum(x_i - \bar{x})(y_i - \bar{y})$; correlation coefficient is this divided by product of their standard deviations. 
+If $Cov(a_{ij},a_{kl})$ is zero, matrix elements $a_{ij}$ and $a_{kl}$ are uncorrelated; if $i=k$ and $j=l$, they represent the same element and their covariance is simply the vairance of the matrix element $a_{ij}$. 
+
+Greater variability in the log growth rate $\tau^2/\bar{\lambda}_1^2$ = smaller $log \lambda_s$ compared to $log \bar{\lambda}_1$. 
+But variation in a particular element $a_{ij}$ will contribute to variation in population growth rate only to the extent that changing $a_{ij}$ actually influences population growth rate (i.e. if $Var(a_{ij}), aka. Cov(a_{ij},a_{ij})$ is large and changes in $\bar{a}_{ij}$ have a large effect on $\bar{\lambda}_1$, i.e. $\bar{S}_{ij}$ is large)
+
+*Aside on covariance*
+We expect to see both positive and negative covariance, for example:
+
+- Good years for reproduction in one class are good for other classes too
+- Reproduction and survival may both be bolstered by good conditions
+- Years in which individuals in a certain year class tend to grow may also be years where shrinkage is less likely (= negative covariance on the sub and supradiagonal)
+- High reproduction may come at the cost of survival or growth
+
+Positive covariance means that both elements will be high/low - this results in *high year-to-year variation in population growth and lower stochastic log growth rate*.
+
+Negative covariance means that if one element is high, the other is low and vice versa - this results in *lower interannual variance because of cancelling-out effectsand less variable population growth, higher stochastic log growth rate*. 
+This scenario decreases $\tau^2$ and increases $log \lambda_s$. 
+
+```{r "box 7.4 estimate log lambda_s by simulation and Tuljapurkar's approximation"}
+stoc_log_lam <- function(matrices, penv, maxt){
+  if(is.list(matrices)){matrices<-matrix(unlist(matrices), ncol=length(matrices))}
+  # How many classes are there?
+  s <- sqrt(dim(matrices)[1])
+  # The number of matrices
+  numenvts <- dim(matrices)[2] 
+#  res.out <- matrix(NaN, ncol=numreps, nrow=s)
+#  cumdist <- cumsum(penv)
+#  Nend <- vector()
+  # Calculate the mean matrix Abar and covariance matrix C
+  abar<-numeric(s^2)
+  exy <-numeric(s^4)
+  for(m in 1:numenvts){
+    a <- matrices[,m]
+    exy <- exy+penv[m]*kronecker(a,a)
+    abar <- abar+(a*penv[m])
+  }
+  # This is already in matrix form
+  C <- (exy-kronecker(abar,abar))*numenvts/(numenvts-1)
+  C <- matrix(C, nrow=s^2)
+  abar <- matrix(abar, nrow=s)
+  ev <- eigen(abar)
+  lmax <- which(Re(ev$values) == max(Re(ev$values)))
+  lambda <- Re(ev$values[lmax])
+  W <- ev$vectors
+  w <- abs(Re(W[, lmax]))
+  V <- Conj(solve(W))
+  v <- abs(Re(V[lmax, ]))
+  S <- v %o% w
+
+  # Calculate stochastic log lambda by simulation
+  #    Start the simulation at stable distribution of Abar
+  n <- w
+  r <- vector()
+  for(t in 1:maxt){
+    a <- matrix(matrices[,sample(x = 1:numenvts, size = 1, prob = penv)],nrow=s)
+    # Project forward one year
+    n <- a %*% n
+    N <- sum(n)
+    # Calculate log growth rate
+    r[t] <- log(N)
+    n <- n/N # Normalize so sum(n)=1 to avoid population sizes too large or small for the computer to handle
+  }
+  loglsim<-mean(r)
+  dse<-1.96*sqrt(var(r)/maxt)
+  CI<-c(loglsim-dse, loglsim+dse)
+  
+  ## Tuljapurkar approximation
+  Svec<-matrix(S, ncol=1)
+  tau2<-t(Svec) %*% C %*% Svec   
+  loglams<-log(lambda) - tau2/(2*lambda^2)
+  
+  results.list <- list(loglsim = loglsim,
+                       lambda.1.eigen = lambda,
+                       log.lambda.sim = loglsim,
+                       Conf.Limits.untransformed = CI,
+                       tau.2 = tau2,
+                       t.loglams = loglams,
+                       t.lams = exp(loglams))
+  results.list
+}
+
+#sim.res <- 
+stoc_log_lam(matrix.list,penv,maxt=50000)
+```
+
+Note that the Tuljapurkar approximation for $log \lambda_s$ takes much less time to calculate than the many iterations, but it assumes that variation in matrix elements is relatively small. 
+Using both methods allows for comparison - the simulation method is more accurate, but if variation is small to moderate the Tuljapurkar's approx is faster.
+
+### Calculating the probability of hitting quasi-extinction threshold by time t
+There are two methods to calculate the **cumulative distribution function** - computer simulation (appropriate for any degree of variation), the second assumes that variation is small to moderate and uses estimates of $\lambda_s$ and $\tau^2$ from the Tuljapurkar approximation. 
+
+#### 1. Simulating extinction probabilities
+We simply need to modify the code from box 7.3 to keep track of whether density falls below the quasi-extinction threshold $N_x$
+```{r}
+simext <- function(matrices, penv, tmax, numreps, maxruns, n0, nx, sumweight=rep(1,length(n0))){
+  # matrices = list of matrices for each year of demographic study
+  # penv is the probability that each matrix is randomly selected
+  # tmax = max time
+  # numreps = number of simulated repetitions
+  # n0 = starting population size
+  s <- sqrt(as.numeric(summary(matrices[1])[1]))
+  res.out <- matrix(NaN, ncol=numreps, nrow=s)
+  for(i in 1:maxruns){
+    Results <- vector()
+    PrExt <- rep(0,tmax)
+    for(j in 1:numreps){
+      # if(j%%1000==0){print(j)}
+      n <- n0
+      for(t in 1:tmax){
+        x <- sample(1:4, 1, prob=penv)
+        a <- matrices[[x]]
+        n <- a %*% n
+        N <- sum(sumweight * n) 
+        if(N<nx){
+          PrExt[t] <- PrExt[t]+1
+          break
+        }
+      }
+    }
+    PrExt <- cumsum(PrExt/numreps) # Sum extinctions at each time to get CDF
+    Results <- c(Results,PrExt)
+    iter.results <- data.frame(p.ext=Results, time=1:tmax, run=i)
+    if(i==1){
+      final.results <- iter.results
+    } else {
+      final.results <- rbind(final.results, iter.results)
+    }
+  }
+  final.results
+}
+
+simulated.extinction.cdf <- simext(matrices = matrix.list, penv = penv, tmax = 50, numreps = 5000, 
+                                   maxruns = 10, n0 = c(4264, 3, 30, 16, 25, 5), nx=500)
+
+library(ggplot2)
+p1 <- ggplot()+
+  geom_line(data=simulated.extinction.cdf, aes(y=p.ext, x=time,
+            group=as.factor(run), color=as.factor(run)))
+p1
+```
+  
+  We can set the quasi-extinction threshold by changing the sumweights for the different classes (e.g. if we want `nx` for only adults, set weights to `[0, 0, 0, 0, 0, 1]`)
+  
+#### 2. Calculating using diffusion approximations
+
+The same diffusion approximation used to derive the extinction time CDF for count-based models can work in structured populations. Assuming the amount of environmental variation is small-moderate:
+
+- recall that we approximated $\mu (log\lambda_i = log(N_{i+1}/N_i)), \sigma^2, and\ d$ for the count - the above code has approximated $\mu$ in a sort-of similar way in the weighted sum
+- we can use Tuljapurkar's approximation to substitute $log \lambda_s$ instead of the simulated value and $\tau^2/\bar{\lambda}_1^2$ for $\sigma^2$
+- to calcualte $d$, we need to take into account each class' contribution to the next generation, not just the sum of classes in the current population vector, $n_c$
+Lande and Orzack (1988) suggest to calculate $N_c$, individuals in different classes should be weighted by reproductive values ($v$), computed from the dominant left eigenvector of $\bar{A}$. 
+
+```{r "box 7.6"}
+# Requires these functions and library from Chapter 3
+library(VGAM)
+
+stdnormcdf <- function(z){
+  # Calculates the standard normal cumulative dist
+  #    function. 
+  phi=0.5*(1+erf(z/sqrt(2)))
+  return(phi)
+}
+
+extcdf <- function(mu, sig2, d, tmax){
+  # Calculates the standard normal cumulativedist
+  #    function from t=0 to tmax
+  # d is log distance from the quasi-extinction
+  #    threshold
+  # Requires extcdf
+
+  g <- vector(length=tmax)
+  for(t in 1:tmax){
+    g[t] <- stdnormcdf((-d-mu*t)/sqrt(sig2*t))+
+      exp(-2*mu*d/sig2)*stdnormcdf((-d+mu*t)/sqrt(sig2*t))
+  }
+  return(g)
+}
+
+tuljapurkar.ext.approx <- function(matrices, penv, n0, nx, tmax){
+    if(is.list(matrices)){matrices<-matrix(unlist(matrices), ncol=length(matrices))}
+  # How many classes are there?
+  s <- sqrt(dim(matrices)[1])
+  # The number of matrices
+  numenvts <- dim(matrices)[2] 
+#  res.out <- matrix(NaN, ncol=numreps, nrow=s)
+#  cumdist <- cumsum(penv)
+#  Nend <- vector()
+  # Calculate the mean matrix Abar and covariance matrix C
+  abar<-numeric(s^2)
+  exy <-numeric(s^4)
+  for(m in 1:numenvts){
+    a <- matrices[,m]
+    exy <- exy+penv[m]*kronecker(a,a)
+    abar <- abar+(a*penv[m])
+  }
+  C <- (exy-kronecker(abar,abar))*numenvts/(numenvts-1)
+  C <- matrix(C, nrow=s^2)
+  abar <- matrix(abar, nrow=s)
+  ev <- eigen(abar)
+  lmax <- which(Re(ev$values) == max(Re(ev$values)))
+  lambda <- Re(ev$values[lmax])
+  W <- ev$vectors
+  w <- abs(Re(W[, lmax]))
+  V <- Conj(solve(W))
+  v <- abs(Re(V[lmax, ]))
+  S <- v %o% w
+  
+  Svec <- matrix(S, ncol=1)
+  # This is equivalent to 
+  sigma2 <- t(Svec) %*% C %*% Svec/lambda^2
+  loglams <- log(lambda) - 0.5*sigma2
+  
+  v <- v/(v%*%w)
+  Nc <- sum(t(v)%*%n0)
+  d <- log(Nc/nx)
+  cdf <- extcdf(loglams, sigma2,d,tmax)
+  cdf
+}
+
+res <- data.frame(p.ext=tuljapurkar.ext.approx(matrices=matrix.list, penv=penv, tmax = 50, n0 = c(4264, 3, 30, 16, 25, 5), nx=500), time=1:50)
+p1 + geom_line(data=res, aes(x=time, y=p.ext),size=1)
+```
+
+The diffusion approximation overestimates the cumulative probability of extinction esp. as time increases. 
+  
+**Implications**:
+  
+- Recall that diffusion assumes that population growth rate is uncorrelated ($Cor=0$), but *in structured populations some amount of temporal autocorrelation is necessary* as a result of structure
+- This is not a paradox - self-generated autocorrelation in growth rate of structured populations becomes effectively indepednent of growth rates in years not far in the past; the autocorrelation does not persist long enough
+- when autocorrelation is small, we can apply the diffusion approximation to a series of counts *even if these counts come from a population we know has age, size, or stage structure*
+- The value of the analytic CDF comes not from speed or ease of computation - **we can use it to estimate extinction probabilities for a structured population for which we have census counts but no underlying detailed demographic data** if the assumptions of small variation and autocorrelation are met
+
+### Extreme events
+Note that by changing the matrices and the probability of each matrix occuring, we can also include booms/busts in our simulations. 
+However, it is not appropriate in this case to use the Tuljapurkar approximation for $log \lambda_s$ or the extinction time CDF, but to use simulation. 

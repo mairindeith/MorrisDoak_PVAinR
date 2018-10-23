@@ -1,0 +1,212 @@
+---
+title: "Chapter  9 - Sensitivity Analysis"
+author: Mairin Deith
+output: html_document
+---
+
+Notes on the chapter:
+
+## Sensitivity analysis in deterministic models
+
+- the use of matrix models in conservation can benefit from sensitivity analysis - how sensitive is overall population growth to changes in demographic rates
+   - Here's a deterministic example for emperor goose in Alaska:
+   
+$$
+A=
+\begin{pmatrix}
+0 & 0 & f_2 s_{\geq1} & f_{\geq3}s_{\geq1} \\
+s_0 & 0 & 0 & 0 \\
+0 & s_{\geq1} & 0 & 0 \\
+0 & 0 & s_{\geq1} & s_{\geq1}
+\end{pmatrix}
+= 
+\begin{pmatrix}
+0 & 0 & 0.57 & 0.798 \\
+0.136 & 0 & 0 & 0 \\
+0 & 0.893 & 0 & 0 \\
+0 & 0 & 0.893 & 0.893
+\end{pmatrix} ... \lambda_1 = 0.9887
+$$
+
+   - It is now possible to slightly modify the values for fecundity and survival to determine how each influence $\lambda_1$
+   - To get a single value - **the slope of the tangent line of rate of change in $\lambda_1$ with a change in each vital rate at the current value of $\lambda_1$**
+   - Issues with this tangent approach:
+      - Nonlinear relationship between $\delta \lambda_1$ and $\delta r_i$, where $r_i$ is a given rate
+         - assuming a linear rate can overinflate the benefits of management, in reality the benefits to $\lambda_1$ are likely to taper off
+         - e.g. Raising juvenile survival from 0.136 to 0.7 is expected to raise $\lambda_1$ to 1.32 ($S_{s0} = 0.58; \delta\lambda_1 = 0.58(0.7-0.136)=0.327; 0.327+0.9887\approx1.32$), but re-doing the matrix with $s_0=0.7$ results in a new $\lambda_1=1.21$
+      - Scaling of sensitivity values - sensitivity is the slope of the line between $\lambda_1$ and a vital rate $\delta \lambda_1/\delta r_i$
+         - An increase in juvenile survival of 0.15 is far more significant than an increase in fecundity of 0.15, as $s_0$ would more than double; i.e. *a biologically small change in reproduction is numerically equivalent to a massive change in survival*
+         - **Elasticity** = proportion change in $\lambda_1$ resulting from a proportion change in $r_i$; still the slope of the tangent line, but proportional instaed of actual change
+
+$$E_{r_i} = \frac{r_i}{\lambda_1}\frac{\delta \lambda_1}{\delta r_i} = \frac{\delta\lambda_1 / \lambda_1}{\delta r_i/r_i}$$
+
+### Sensitivity for deterministic matrices
+- Easiest way to calculate deterministic sensitivity = calculate the slope of the tangent between very close pairs of values for $\lambda_1$ and $r_i$:
+$$S_{r_i} = \frac{\lambda_{1,new} - \lambda_{1,old}}{r_{i,new}-r_{i,old}}$$
+
+   - Rule of thumb - delta should be ~1%
+- A more elegant method (but with no appreciable gain in utility) requires the use of eigenvectors of the projection matrix
+
+$$ S_{ij} = \frac{\delta \lambda_1}{\delta a_{ij}}=\frac{v_i w_j}{\sum^s_{i=1}{v_i w_i}} $$ 
+
+where $w_j$ is the stable distribution value for the $j^{th}$ element/class of the stable distribution matrix, and $v_i$ is the reproductive value of the $i^{th}$ class.
+   - There is a limitation here - **this method looks at changes in matrix elements, not vital rates**
+   - Need to calculate the derivatives of the matrix elements with respect to their vital rates, sum the derivatives of $\lambda_1$ with respect to $a_{ij}$ times the derivatives of $a_{ij}$ with respect to vital rates $r_k$ (aka the sensitivies of matrix elements $S_{ij}$ times the derivative of $a_{ij}$ wrt $r_k$):
+   
+   $$S_{r_k} = \sum^s_{i=1}\sum^s_{j=1} \frac{\delta \lambda_1}{\delta a_{ij}}\frac{\delta a_{ij}}{\delta r_k} = \sum^s_{i=1}\sum^s_{j=1}S_{ij}\frac{\delta a_{ij}}{\delta r_k}$$
+   ^ the chain rule for differentiation ($if\ Y \ and \ Z \ are \ functions\ of\ X: \frac{\delta Z}{\delta X}=\frac{\delta Z}{\delta Y}\frac{\delta Y}{\delta X}$)
+   - If vital rates combine in more complicated ways, it may be necessary to use symbolic logic programs to estimate the derivatives of matrix elements with respect to each vital rate
+   
+```{r "box 9.1}
+# Box 9.1 is replicated with popbio's vitalsens
+library(popbio)
+
+## load vital rates and correlation matrices
+data(hudvrs)
+data(hudcorrs)
+## set vrtypes
+hudvrtypes <- c(rep(1,13), rep(3,5), rep(1,6))
+## run Full model- using 100 runs here for speed
+full <- vitalsim(hudvrs$mean, hudvrs$var, hudcorrs$corrin,
+hudcorrs$corrout, hudmxdef, vrtypes=hudvrtypes,
+n0=c(4264,3,30,16,25,5), yrspan=20 , runs=100)
+## deterministic and stochastic lambda
+full[1:2]
+## log stochastic lambda
+log(full$stochLambda)
+sd(full$logLambdas)
+## SKIP the next two simulations- however, sample output is included for plotting
+#NO between year correlations so corrout = diag(0,13) - all zeros
+# no.between <- vitalsim(hudvrs$mean, hudvrs$var, hudcorrs$corrin,
+# diag(0,13), hudmxdef, vrtypes=hudvrtypes,
+# n0=c(4264,3,30,16,25,5), yrspan=20 )
+no.between <- list(CDFExt=c(rep(0,40),0.01,0.04,0.12,0.15,
+0.20,0.31,0.49,0.58,0.72,0.78))
+#NO correlations so corrout = diag(0,13) AND corrin=diag(13) - ones on diagonal
+# no.corr<-vitalsim(hudvrs$mean, hudvrs$var, diag(13),
+# diag(0,13), hudmxdef, vrtypes=hudvrtypes,
+# n0=c(4264,3,30,16,25,5), yrspan=20 )
+no.corr <- list(CDFExt=c(rep(0,39),0.03,0.03,0.06,0.12,0.20,
+0.30,0.42,0.52,0.65,0.76,0.83))
+## Figure 8.3 with corrected correlation matrices for full model
+matplot(cbind(a=full$CDFExt, no.between$CDFExt, no.corr$CDFExt), type='l',
+ylim=c(0,1), lty=1:3, col=2:4, lwd=2, las=1,
+xlab="Years into the future", ylab="Cumulative probability of quasi-extinction")
+legend(2,1, c("Full model", "No between-year correlations", "No correlations"),
+lty=1:3, col=2:4, lwd=2)
+```
+
+### Sensitivity to effects of management
+- Management often affects multiple vital rates - we can deal with this by simply adding up the sensitivity of elasticity values of the rates that are affected to approximate the sign of the effect of management
+- this simple approach works when there are a few vital rates affected by management, *more realistically, we can include management as a rate in the matrix*
+$$
+A=
+\begin{pmatrix}
+0 & 0 & f_2 s_{\geq1}(2-h) & f_{\geq3}s_{\geq1}(2-h) \\
+s_0(4-3h) & 0 & 0 & 0 \\
+0 & s_{\geq1}(2-h) & 0 & 0 \\
+0 & 0 & s_{\geq1}(2-h) & s_{\geq1}(2-h)
+\end{pmatrix}
+$$
+
+where $h$ is the a variable that represents hunting effects as a proportion of current rates. Another option: if we know the exact mortality caused by hunting vs. natural causes:
+$$
+A=
+\begin{pmatrix}
+0 & 0 & f_2 s_{\geq1}(1-hm_{\geq1,h}) & f_{\geq3}s_{\geq1}(1-hm_{\geq1,h}) \\
+s_0(1-hm_{0,h}) & 0 & 0 & 0 \\
+0 & s_{\geq1}(1-hm_{\geq1,1}) & 0 & 0 \\
+0 & 0 & s_{\geq1}(1-hm_{\geq1,1}) & s_{\geq1}(1-hm_{\geq1,1})
+\end{pmatrix}
+$$
+   - Here, mortality is partitioned into natural and hunting mortality ($m$, influenced by hunting effort $h$)
+- Putting management in the matrix also highlights tradeoffs; the **best option may be intermediate management**
+
+### Caveats for using deterministic sensitivities and elasticities
+Purpose of sensitivity/elasticity:
+
+1. Determine effects of different amount/combinations of changes to vital rates
+2. Indicate relative importance of demographic rates
+3. Pinpoint vital rates for which it is especially desirable to have accurate values
+
+**When will sensitivity/elasticity analysis be inaccurate. negating their advantage of conciseness?**
+
+- **Linearity** - only guaranteed to be accurate for small changes in vital rates; better to create a full matrix with management impacts and calculate new $\lambda_1$
+- **Changes in multiple rates** - the multiplicative solution in the Elegant Solution above assumes small changes in rates AND no interaction between vital rates (i.e. proportional change in $\lambda_1$ can be calculated by summing up proportional changes in each $r_i$ times its elasticity)
+- **Inappropriate use of proportional change comparisons** - it is often assumed that the same proportional change in any given vital rate is equally likely to that proportional change in another rate
+   - For example, in the goose example the sensitivity of adult survival is double juvenile survival (elasticity 10x, due to small size of juvenile survival)
+   - had the matrix been built of **mortality rates instead of survival rates**, the sensitivity values are identical magnitude but opposite sign and juvenile elasticity is much higher for juvenile mortality than adult mortality because of the much larger starting value of juvenile mortality
+   - Proportional changes in survival and mortality are only equal if the rates are 0.5
+   - Assuming we can compare proportional changes in survival rate necessitates the assumption that proportional changes in mortality *are not comparable*
+   - Any comparison of elasticity of different vital rates should be accompanied by some justification that proportional changes in these rates are comparable to one another
+- **Poor ability for rates to change** - if, for example, adult survival has the strongest effect on $\lambda_1$ but is already high, it may be impossible to push it higher
+   - you can set upper/lower bounds on the vital rate by looking at extreme estimates of the vital rate in nature and calculating the maximum $\delta \lambda_1$ possible ($max\ \delta \lambda_1 = E_{r_i}(r_{max}-r_i)/r_i$)
+   - this approach still has the above limitations; best to perform targeted alteration of the matrix using specific combinations of maximum vital rates to calculate the resulting population growth rates directly
+
+### Sensitivity analysis including biological limits and avoiding small change assumptions
+
+- Generate a large set of matricies for a species/population, each using different values for a vital rate
+- Calculate $\lambda_1$ for each matrix, then perform simple and multiple regressions of $\lambda_1$ as a function of each vital rate (using minimum/maximum values for each rate)
+   - *Note: in the case of management, setting the minimum value of each rate to its current value is useful, we want to increase rates*
+   - This method is sensitive to the upper bounds placed on each rate
+- Then calculate the % of variation in $\lambda_1$ explained by each $\delta r_i$
+
+
+### Incorporating uncertainty into sensitivity results
+
+*see box 9.2, not yet transcribed*
+
+To explore the importance of uncertainty - address uncertainty in vital rate estimates rather than potentially real changes in vital rates. 
+Consider the above section's minimum and maximum rates as 95% confidence intervals for each vital rate, create a set of random matrices, and ask how this uncertainty effects elasticity values. Some vital rate estimates might have broad enough confidence limits to they lead to important uncertainty in elasticity values.
+
+### Summary of deterministic sensitivity analysis:
+
+1. Calculate both sensitivity and elasticity values
+2. Make plots in change in population growth rate in response to the highly elastic/sensitive values from 1, look for nonlinearities and show limits to their potential effects resulting from biological limits
+3. Determine if switching from survival to mortality rates drastically changes the ranking of elasticities
+4. Use Box 9.2's simulation approach to ask how uncertainty/changes in vital rates influences population growth, sensitivity, or elasticity
+5. Reformulate the matrix to include parameters (e.g. harvest rate) resulting from management
+
+## Sensitivity analysis in stochastic models
+
+- generally deterministic models' sensitivity/elasticity are good approximations of stochastic matrices; probably true for long lived species (for which there are many PVAs) but not for shorter-lived species with more variable life histories
+- three considerations
+   
+   1. Stochastic growth and extinction probability both have to be estimated
+   2. Mean vital rates and their variance/covariance must be included
+   3. Method of calculating sensitivty/elasticity must include temporal variation
+   
+### Stochastic growth rate
+
+- **Analytical solution** - take the derivative of Tuljapakar's formula for stochastic growth rate $\lambda_s$ with respect to different vital rates:
+$$
+\frac{\delta log \lambda_s}{\delta a_{ij}} \approx \frac{\bar{S}_{mn}}{\bar{\lambda_1}} + \frac{\bar{S}_{mn}}{\bar{\lambda}_1^3} \tau^2 - \frac{1}{2\bar{\lambda}^2_1}\sum^s_{i=1}\sum^s_{j=1}\sum^s_{k=1}\sum^s_{l=1} Cov(a_{ij},a_{kl})\Big( \bar{S}_{kl} \frac{\delta \bar{S}_{ij}}{\delta a_{mn}} + \bar{S}_{ij} \frac{\delta \bar{S}_{kl}}{\delta a_{mn}} \Big) \\ \tau^2 = \sum^s_{i=1}\sum^s_{j=1}\sum^s_{k=1}\sum^s_{l=1} Cov(a_{ij},a_{kl})\bar{S}_{ij} \bar{S}_{kl}
+$$
+   - If covariances are small, the second two terms are small and the stochastic $\lambda_s$ is approximately $\lambda_1$'s sensitivty
+   - The importance of variance or covariance of matrix elements depends on how sensitive deterministic population growth is to the values of those elements; sensitivies of $log \lambda_s$ to covariance or variance are always negative, decreasing ultimate population viability
+
+*see boxes 9.3 and 9.4 for code on calculating the second derivatives of deterministic growth rate (or first derivatives of sensitives) to calculate stochastic sensitivies, and code to calculate sensitivities and elasticities of stochastic growth rate to means, variances, and covariances of matrix elements*
+
+- If we want to then calculate sensitivies to vital rates instead of matrix elements, we follow the same procedure as in the deterministic analysis
+   - Sum the effects of rate through all elements it affects ($S_{r_k}^s \approxeq \sum^s_{i=1}\sum^s_{j=1} S_{ij}^s \frac{\delta a_{ij}}{\delta r_k}$)
+   - The influence of vital rate variance or covariance is calculated the same way ($S_{Cov(r_m,r_n)}^s \sum^s_{i=1}\sum^s_{j=1}\sum^s_{k=1}\sum^s_{l=1} S_{Cov(a_{ij},a_{kl})}^s Cov(a_{ij},a_{kl})\frac{\delta Cov(a_{ij},a_{kl})}{\delta Cov(r_m, r_n)}$ where $S_{Cov(a_{ij},a_{kl})}^s = \lambda_s \frac{\delta log \lambda_s}{\delta Cov({a_{ij}},{a_{kl}})}$)
+- If multiple vital rates contribute to each vital rate, a simulation approach might be needed -it is difficult to determine the derivatives of the covariances between matrix elements
+   - this allows us to highlight which of **mean rates, rate variance, or correlation** of matrix elements has the most sensitivity with regard to $lambda_s$
+   - *see box 9.5*
+   - simulation methods in stochastic models require more years of simulation, and generally variance and correlation of vital rates cannot be changed by management (although they typically have low sensitivity anyway)
+   
+### Stochastic extinction probability sensitivity
+
+- unlike growth rate, sensitivities of extinction probability are time dependent - setting *a priori* time horizons of interest and plotting the full sensitivity functions against time makes the most sense (*see box 9.5, this calculates the extinction time CDF for each perturbation of mean or covariance in vital rates*)
+   - Create a matrix with a column of $G(t)$ values against perturbation of vital rates, then calculate $\delta G(t)/\delta X$, where $X$ is the purturbed mean, variance, or covariance being purturbed; it is advisable to smooth these values if a large number of replicates was run
+
+## Sensitivity analysis for density dependent models
+
+- it is meaningless to ask about the sensitivity of population growth rates because growth changes as a function of density and **there is no single vital rate that is most sensitive**
+   - changing vital rates may change the position of equilibrium (given that dd populations reach a stable size and distribution), but once eq'm is reached $\lambda=1$
+   - what we can ask is **how does equilibrium population size change in response to vital rates**
+- *In a deterministic density dependent population*, equilibrium sensitivity is proportional to the corresponding sensitivity of population growth rate of dependent-dependent projection matrix evaluation at equilibrium
+    - HOWEVER! This isn't very valuable: in a deterministic model, there is no environmental stochasticity that would increase the viability of a larger population over that of a small one - there are no analytical formulas for the stochastic sensitivies of extinction probability for density dependent projection matrices, simulations must be used
+    - For density dependent vital rates (like $\beta$ in fishery population models), we can examine how changing those rates can change extinction probability
+   
+

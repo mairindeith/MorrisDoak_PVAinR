@@ -1,0 +1,66 @@
+---
+title: "Chapter 12 - Criticisms and caveats: When to perform or not perform a PVA"
+author: Mairin Deith
+output: html_document
+---
+
+- it is often very difficult to come up with precise statements about population viability, most notably the sparse amount and noisy nature of available data
+- critiques of PVA should alwyas be considered - incorporating and exploring the uncertainties about parameter values, model structure, and predictions are key in performing a PVA; however, biases and limitations may render PVA unproductive **if not detrimental**
+   - counter this with the fact that the alternative is expert opinion, sweeping generalizations, and politically motivated priority-setting
+   
+## Criticisms
+
+###1. Too few data are available upon which to base quantitative risk assessments for rare species (especially for rare species needing protections)
+- sparse data are susceptible to **bias** and **imprecision** to estimates of population parameters 
+- the most important = **temporal variability of growth and vital rates** - extreme environmental conditions are unlikely to be seen in short time series
+- it is estimated that to estimate the probability of q-ext by year $T$, you need 5-10$T$ years of data
+   - a sensible way to proceed: we are usually less interested in calculated *actual* probability of q-ext compared to comparing relative risks to viability (and often ten years of data are sufficient to know the sign (+/-) of population growth)
+
+###2. Observation errors compromise the usefulness of even long datasets
+- even when accounted for, errors introduce wide confidence bands around population parameters
+   - however, even large systematic biases (e.g. consistent 20% undercounts or 400% overcounts) would not seriously compromise the accuracy of estimated probability of q-ext 
+   - most modest random errors (that fall within 15% of actual true counts) could substantially degrade ext risk when density dependence was strong, esp. when intrinsic growth rate is low and environmental stochasticity is intermediate (these effects are reduced when density dependence is weak or absent)
+   - Therefore errors do not necessarily doom viability estimates to be inaccurate to the point of uselessness - much of the debate has focused on extinction probabilities, *which are the least accurate output of a PVA anyway*
+   - if focusing on sensitivity analysis for management, population growth, or relative viability, these points matter less
+   
+###3. Models omit too many factors likely to influence viability
+- these include genetic factors, density dependence, infrequent catastrophes, temporal trends in environmental features from invasive species, declining habitat, ongoing changes in abiotic factors
+   - however, models should be as simple as the data allow, including these factors just compounds uncertainty
+   - Alfred North Whitehead: "seek simplicity, but distrust it"
+   
+###4. PVA models are rarely validated
+- even when models predict the correct proportion of a suite of species declining by a certain amount, predictions for any one species may be imprecise
+- this can be addressed by splitting data into testing and training datasets, but this further reduces the data available with which to estimate parameters
+- different models that fit the available data can make different predictions about population viability and the consequences of competing management strategies
+
+## Recommendations and cautions
+
+### 1. Avoid a formal PVA is the amount of data is truly sparse
+- we need to avoid the **fallacy of illusory precision** that an unsubstantiated model might create
+- as a tentative guideline, at least ten years of census data should be used for a count-based PVA (but this would preclude nearly every PVA that has been conducted)
+- at least 4 years - 3 transitions - should be used; but less data can be used for a sensitivity analysis to prioritize management options/understand threats
+- as model complexity increases (i.e. count-based models to demographic to multi-site), so too do data requirements
+
+### 2. Do not present estimates of viability without confidence intervals
+- this can be done by sampling parameter values with bootstrapping or Bayesian approaches
+
+### 3. View viability metrics as qualitative, not absolute, gauges of population status
+- the point estimates are meaningless; out objectives should be relative rankings, sensitivity analysis, etc.
+- PVA may be too blunt of a tool to accurately classify species according to precise criterion of extinction risk, like World Conservation Union's guidelines
+
+### 4. Do not try to project too far into the future
+- simpler, better-justified models are best used to make short-term predictions
+
+### 5. Always consider how determinants of viability that were omitted from models might cause risk assessments to be optimistic/pessimistic
+- not accounting for observation error can cause pessimistic outcomes
+- ignoring catastrophes or certain forms of migration can cause optimistic outcomes
+
+###6. Never base management on estimates of absolute extinction
+- always use a q-ext threshold instead of an absolute limit of 1 or 0 individuals
+
+###7. Whenever possible, consider multiple models to address model uncertainty
+- use all well-fitting models to assess viability and management options
+
+###8. Consider PVA a work in progress, not the final word
+- there is always more data that is being collected, which allows us to improve the accuracy of parameter estimates and reconsider basic assumptions made during the initial PVA
+- as PVAs develop, there will be the opportunity to create PVAs for species without data, as the PVAs for similar species can guide management, decision-making, and PVA creation for those that are understudied

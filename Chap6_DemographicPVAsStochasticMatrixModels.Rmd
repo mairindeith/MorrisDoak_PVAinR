@@ -3,6 +3,12 @@ title: "Chapter 6 - Demographic PVAs - Using Demographic Data to Build Stochasti
 author: Mairin Deith
 output: html_document
 ---
+<!--
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{natserv vignette}
+%\VignetteEncoding{UTF-8}
+-->
+=====
 
 All previous examples have assumed that all individuals are identical - but we know that they have different survival and reproductive rates (e.g. larger individuals have higher survival and reproductive rates).
 

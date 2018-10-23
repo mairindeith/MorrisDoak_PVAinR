@@ -1,0 +1,1041 @@
+---
+title: "Chapter 8 - Demographic PVAs - Removing sampling variation and incorporating large variance, correlated environments, demographic stochasticity and density dependence into matrix models"
+author: Mairin Deith
+output: html_document
+---
+<!--
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{natserv vignette}
+%\VignetteEncoding{UTF-8}
+-->
+=====
+
+The last chapter looked at cases with small environmental variance and used the Tuljpurkar's and diffusion approximations for $log \lambda_s$ and $\tau^2/\lambda_1^2$ instead of $\mu\ and\ \sigma^2$ and simulations to create the extinction probability CDF. 
+We investigated what happens when the **matrix elements** change; now we will investigate how to incorporate large variance, autocorrelation, demographic stochasticity, and density dependence into the **vital rates** that they act upon. 
+
+Vital rates are the fundamental biological units of PVA - we cannot describe changes in the matrix elements to incorporate the above factors. 
+But it is more complicated - we need to remove the influence of sampling variation and calculate the mean and standard deviation.
+
+## Estimation and Construction of Stochastic Models based on vital rates
+
+Three basic kinds of vital rates:
+
+1. Fertility $f_i$
+2. Survival $s_i$
+3. Growth/transition rates $g_{ij}$
+
+### Estimation and use of means, variances, and correlations in vital rates
+
+The key issue = accurate estimate of correlationa nd variance in demographic rates characterizing a population.
+The matrix-choosing approach in the last chapter, i.e. selecting one transition matrix per year at random, assumes that the precise combinations of matrix elements we boserved will always co-occur. 
+It is better to assume that vital rates can take a range of possible values while preserving the observed means, variances, and average correlation structure between these rates (especially as rates can have strong positive or negative covariances with one another).
+
+e.g. A snake species has a survival probability in class 3 $s_3$ of 0.95 and a growth probability $g_{4,3}$ of 0.1. The mean matrix elements describing these transitions will be $a_{3,3} = 0.95(1-0.1)$ and $a_{4,3} = 0.95(0.1)$. 
+But even if growth and survival are not directly correlated, the matrix elements will be because $a_{3,3}$ is dependent on the growth rate $g_{4,3}$ and $a_{4,3}$ with its complement $1-g_{4,3}$. 
+
+By generating random vital rates (within bounded limits, i.e. 0 and 1) we can explicitly include biological restrictions on the sums of different matrix elements and make better predictions compared to if we randomly assigned matrix elements directly.
+
+**Desert tortoise example**
+
+From a single site (Desert Tortoise Natural Area) over three time periods from the 1970s and 1980s - use three estimates for each survival/growth rate (late 1970s, early 1980s, later 1980s).
+There are no estimates of fertility from this site, so we don't allow the estimates to vary in the model as they are taken from another site (the correlations between these fertilities and all other rates are zero).
+
+**Definitions for matrix elements**
+```{r echo=F}
+library(kableExtra)
+library(ggplot2)
+
+matrix.df <- data.frame(class.name=c("","Yearling","Juvenile1","Juvenile2","Immature1","Immature2","Subadult","Adult1","Adult2"),
+                        'Size class t plus 1' = c(' ',0:7),
+                        size.t.0 = c(0,' ', 's2',rep(' ',6)),
+                        size.t.1 = c(1,' ', 's2(1-g2)','s2g2',rep(' ',5)),
+                        size.t.2 = c(2,' ', ' ', 's2(1-g2)', 's2g2',rep(' ',4)),
+                        size.t.3 = c(3,' ',' ',' ','s3(1-g3)','s3g3', rep(' ',3)),
+                        size.t.4 = c(4,' ',' ',' ',' ','s4(1-g4)','s4g4',' ',' '),
+                        size.t.5 = c(5,'f5',' ',' ',' ',' ','s5(1-g5)','s5g5',' '),
+                        size.t.6 = c(6,'f6',' ',' ',' ',' ',' ','s6(1-g6)','s6g6'),
+                        size.t.7 = c(7,'f7',' ',' ',' ',' ',' ',' ','s7')
+)
+
+kable(matrix.df) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+
+```
+**Vital rates**
+
+```{r echo=F}
+vitals.df <- data.frame(class=c(2:7),
+                        g.70s = c(0.5,0.5,0.47,0.23,0.063,''),
+                        g.e.80s = c(0,0.18,0.067,0.26,0.032,''),
+                        g.l.80s = c(0.5,0.177,0,0,0,''),
+                        g.mean = c(0.33,0.28,0.18,0.16,0.032,''),
+                        g.var = c(0.083,0.036,0.065,0.02,0.001,''),
+                        s.70s = c(0.63,0.91,0.98,0.98,0.99,0.78),
+                        s.e.80s = c(1,1,0.59,0.92,1,1),
+                        s.l.80s = c(0.65,0.98,0.81,1,0.68,0.8),
+                        s.mean = c(0.76,0.96,0.79,0.96,0.89,0.86),
+                        s.var = c(0.044,0.002,0.039,0.0018,0.034,0.015)
+)
+
+kable(vitals.df) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+
+**Correlation coefficients between growth and survival rates**
+```{r echo=F}
+corr.df <- data.frame(rates=c(paste0('g',rep(2:6)),paste0('s',rep(2:7))),
+                      g2 = c(1,0.469,0.382,-0.597,-0.014,-1,-0.704,0.898,0.956,-0.514,-0.994),
+                      g3 = c('',1,0.995,0.429,0.877,-0.496,-0.957,0.81,0.189,0.516,-0.563),
+                      g4 = c('','',1,0.514,0.919,-0.41,-0.925,0.75,0.094,0.597,-0.481),
+                      g5 = c('','','',1,0.811,0.571,-0.149,-0.182,-0.806,0.995,0.505),
+                      g6 = c('','','','',1,-0.017,-0.7,0.428,-0.307,0.865,-0.096),
+                      s2 = c('','','','','',1,0.726,-0.911,-0.946,0.487,0.997),
+                      s3 = c('','','','','','',1,-0.945,-0.465,-0.247,0.778),
+                      s4 = c('','','','','','','',1,0.729,-0.083,-0.941),
+                      s5 = c('','','','','','','','',1,-0.743,-0.918),
+                      s6 = c('','','','','','','','','',1,0.417),
+                      s7 = c('','','','','','','','','','',1)
+)
+
+kable(corr.df) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+**Reproductive rates**
+
+```{r echo=F}
+ferts <- data.frame(f5=0.42,
+                    f6=0.69,
+                    f7=0.69)
+
+kable(ferts) %>%
+  kable_styling(bootstrap_options = "striped", full_width = F)
+```
+### Discounting sampling variation
+
+We now have means, variances, and correlations - we still need to account for observation error/sampling variation and subtract this from the raw variance.
+
+Some rates, like fertility for species with high numbers of offspring can vary continuously with a continuous distribution (in this case, the methods in Chapter 4 can remove the contribution of demographic stochasticity from the raw $\sigma^2$ estimate).
+Demographic stochasticity and sampling variations are two manifestations of the same phenomenon (demo. stoch. = fertility rate of class $i$ caused by chance variation in offspring production among all members in class $i$ of the population; sampling var = contribution to raw variance in offspring production caused by variation within a *sample* of calss $i$ individuals chosen from the population). 
+
+If $f_{i,j}(t)$ is the number of offspring produced by individual $j$ in class $i$ in year $t$, we can correct the environmentally driven variance in fertility rate for $i$, $V_c(f_i)$:
+$$
+V_c(f_i) = \Big(\frac{1}{n-1} \sum^n_{t=1}\big[ \bar{f}_i(t) - \bar{\bar{f_i}}\big]^2 \Big)-\frac{1}{n} \sum^n_{t=1} \Big( \frac{1}{m_i (t) \big[m_i(t)-1 \big]} \sum^{m_i (t)}_{j=1} \big[ f_{i.j}(t)-\bar{f}_i (t)\big]^2 \Big)
+$$
+Where $\bar{f}_i(t)$ is the estimated mean fertility in year $t$, equal to $\frac{1}{m_i(t)}\sum^{m_i (t)}_{j=1} f_{i,j}(t)$, and $\bar{\bar{f}_i}$ is the grand mean of annual mean fetility estimates $\frac{1}{n}\sum^{n}_{t=11} \bar{f_i}$. 
+$m_i(t)$ is the number of individuals in class $i$ whose fertility was measured in year $t$. 
+
+The expression in the first pair of large brackets $\Big( ... \Big)$ is the estimate of total between-year variance. The second is the estimated sampling variance, the square of standard deviation in individual fertilities in a single year divided by $m_i (t)$.
+
+A limitation - it assumes that sampling variance is equal in all years; if this is not the case, we can use a variance discounting method suggested by White (2000) which weights different variances in different years to estimate the overall effect of sampling variance.
+The following equation must be solved iteratively:
+
+$$
+1 = \frac{1}{n-1} \sum^n_{t=1} \Big[ \frac{\big(\bar{f_i}(t)-\bar{\bar{f_i}}\big)^2}{V_c(f_i)+V(f_i(t))} \Big]
+$$
+
+where $V(f_i(t))$ is the observed variance in individual fertilities within year t; $1/[m_i (t) (m_i (t)-1)] \sum^{m_i(t)}_{j=1} \big[ f_{i,j}(t)-\bar{f_i}(t) \big]^2$. 
+We can solve this using the `fzero` function as in Chapter 5, or we can try a lot of numbers and choose the best one and derive confidence limits from the Chi-sq distribution by setting these to the left side of the equation and solving.
+
+```{r box 5.1}
+library(PEIP)
+white <- function(rates, times, classes, minvar, maxvar, trys){
+  # Data must be arranged this way:
+  #   Col1 = class identifier
+  #   Col2 = year ID
+  #   Col3 = Mean survival rate
+  #   Col4= Within-year sampling variance
+  
+  for(class in 1:classes){
+    minrow <- (class-1)*times+1
+    maxrow <- class*times
+    data <- rates[minrow:maxrow,]
+    # This generates a list of var to try
+    meanvar <- seq(minvar, maxvar,len=trys)
+    # Calculate the grand mean rate over all years, the third column in data
+    meanrate <- mean(data[,3])
+    # Loop to calculate the sum that should equal 1
+    sumup <- vector()
+    for(ii in 1:length(meanvar)){
+      sumup[ii] <- sum(((data[,3]-meanrate)^2)/(data[,4]+meanvar[ii])*(times-1))
+    }
+    bestdiff <- min(abs(sumup-1))
+    jj <- which.min(abs(sumup-1))
+    
+    # Find the corresponding best environmental variance estimate
+    estvar <- meanvar[jj]
+    
+    lowChi <- chi2inv(0.975,(times-1))
+    hiChi <- chi2inv(0.025,(times-1))
+    # Find the differences from the correct chisq value
+    CLdiffslow <- abs(sumup*(times-1)-lowChi)
+    CLdiffshi <- abs(sumup*(times-1)-hiChi)
+    # Find differences of sums from correct chi-sq values
+    bestdifflow <- min(CLdiffslow)
+    bestdiffhi <- min(CLdiffshi)
+    bestlowjj <- which.min(CLdiffslow)
+    besthijj <- which.min(CLdiffshi)
+    
+    bestCLlow <- meanvar[bestlowjj]
+    bestCLhi <- meanvar[besthijj]
+  }
+}
+```
+
+When the number of individuals in each class is small, it is better to not break down the population into classes (as above) but instead use a continuous. 
+This prohibits us from having a sample size used to estimate $\bar{f_i}(t)$ ($m_i(t)$) - it is somewhere above the number of individuals in class $i$ but less than the total number across all classes.
+They recommend using the number of individuals in a class plus the two adjoining classes (or single adjoining for the extremes) - this essentially assumes that each class' fertility is the running average.
+
+**Other vital rates (not fertility)**
+While fertility can be continuous, vital rates are often binomially distributed (survival and, in some cases, fertility).
+
+Kendall's method of estimating sampling variance is shown (corrects for estimates of mean survival (or other binary rates) which can be influenced by unequal sample sizes and sampling variance):
+
+$k_i$ is the proportion of $m_i(t)$ individuals that will survive given the probability of survival is $s_i(t)$.
+
+$$
+P\big[ k_i(t) | m_i(t),s_i(t) \big] = \Big( \frac{m_i(t)!}{k_i(t)![m_i(t)-k_i(t)]!} \Big) [s_i(t)]^{k_i(t)}[1-s_i(t)]^{m_i(t)-k_i(t)}
+$$
+The values of $P\big[ k_i(t) | m_i(t),s_i(t) \big]$ will be highest for values of $k_i(t)$ close to $s_i(t)*m_i(t)$; but other values may have high probabilities especially if the sample size is small. 
+Variability in the observed survival rates across years exceeding that predicted by this binomial variation is due to real differences among the $s_i(t)$s which is truly caused by environmental stochasticity.
+
+Variation in the $s_i(t)$s among years is modeled with the beta distribution, which follows the probability density:
+$$
+f(x) = x^{a-1}(1-x)^{b-1}/Beta(a,b)
+$$
+where $Beta(a,b)$ is the beta function and $a$ and $b$ are transformations of the mean and variance of $s_i(t),\bar{s_i},\ and \ var(s_i)$:
+$$
+a=\bar{s_i}\Big[ \frac{\bar{s_i}(1-\bar{s_i})}{var(s_i)}-1 \Big],
+b=(1-\bar{s_i})\Big[ \frac{\bar{s_i}(1-\bar{s_i})}{var(s_i)} -1\Big]
+$$
+We can calculate log-likelihoods:
+$$
+logL_t\big(\bar{s_i},var(s_i)\big)=log \Big( \Big[ \frac{m_i(t)!}{k_i(t)!(m_i(t)-k_i(1))!} \Big] 
+\frac{Beta((k_i(t)+a),(m_i(t)-k_i(t)+b))}{Beta(a,b)} 
+\Big)
+$$
+The total log-likelihood $logL$ is:
+$$
+logL \big( \bar{s_i},var(s_i)\big) = \sum_{t+1}^n logL_t logL_t \big[ \bar{s_i},var(s_i) \big]
+$$
+Where $n$ is the total number of census intervals that you have survival estimates for. 
+
+Values within 3 of the maximum log-likelihood fall within the 95% CIs of the parameters (from the chi-sq distribution).
+The parameter $var(s_i)$ provides an estimate of the environmental variance that is uncontaminated by sampling variance.
+
+```{r box 8.2}
+# Kendall's method to correct for sampling variation
+kendall <- function(rates, times, classes, grades, maxvar, minvar, maxmean, minmean){
+  # The rates dataframe has rate identifier, year, total # starting individuals, 
+  #    number growing/survivng
+  means <- matrix(rep(seq(minmean, maxmean, len=grades),grades), byrow=T, nrow=grades)
+  vars <- matrix(rep(seq(minvar, maxvar, len=grades),grades), nrow=grades)
+  # Calculate the alpha and beta parameters of the beta dist.
+  aa <- means*((means*(1-means)/vars)-1)
+  bb <- (1-means)*((means*(1-means)/vars)-1)
+  
+  # Eliminate impossible combinations of means and variance values (negatives)
+  aa[which(aa<=0)] <- NaN
+  bb[which(aa<=0)] <- NaN
+  
+  results <- list()
+  # Loop through each class
+  for(class in 1:classes){
+    # Find the min and max rows of the data matrices to use
+    minrow <- (class-1)*times + 1
+    maxrow <- class*times
+    rate.data <- rates[minrow:maxrow,]
+    # Divide the number of growing/surviving individuals by the starting #
+    estmn <- mean(rate.data[,4]/rate.data[,3])
+    estvar <- var(rate.data[,4]/rate.data[,3])
+    loglikli <- matrix(rep(0,grades^2),nrow=grades)
+    for(tt in 1:times){
+      # Calculate the -loglik in each year
+      newlogL <- -log(beta(aa+rate.data[tt,4],rate.data[tt,3]-rate.data[tt,4]+bb)/beta(aa,bb))
+      # Add up the log likelihoods for the year
+      loglikli <- newlogL+loglikli
+    }
+    print(paste0("Class is ",class))
+    # Summarize the results
+    minLL <- min(min(loglikli, na.rm=T))
+    # Finding the best var
+    # This returns the minimum value in each column
+    minvars <- apply(loglikli,2,min,na.rm=T)
+    ii <- unlist(apply(loglikli,2,which.min))
+    minii <- min(minvars, na.rm=T)
+    jj <- which.min(minvars)
+    MLEvar <- vars[ii[jj],1]
+    
+    # Find the best mean (rows)
+    minvars.2 <- apply(t(loglikli),2,min,na.rm=T)
+    ii.2 <- unlist(apply(t(loglikli),2,which.min))
+    minii.2 <- min(minvars.2, na.rm=T)
+    jj.2 <- which.min(minvars.2)
+    MLEmean <- means[1,ii.2[jj.2]]
+
+    # Differences from the best -LL
+    clLL <- loglikli-minLL 
+    hivar <- max(max(vars[which(clLL<3)]))
+    lowvar <- min(min(vars[which(clLL<3)]))
+    himean <- max(max(means[which(clLL<3)]))
+    lowmean <- min(min(means[which(clLL<3)]))
+    
+    # Perform correction for max. likelihood estimate of var
+    corrMLEvar <- MLEvar*times/(times-1)
+    corrlowvar <- lowvar*times/(times-1)
+    corrhivar <- hivar*times/(times-1)
+    
+    # Return results
+    results.tmp <- list(
+      loglikelihoods=loglikli,
+      class=rate.data[1,1],
+      estmn=estmn,
+      MLEmean=MLEmean,
+      lowmean=lowmean,
+      himean=himean,
+      estvar=estvar,
+      MLEvar=MLEvar,
+      corrMLEvar=corrMLEvar,
+      corrlowvar=corrlowvar,
+      corrhivar=corrhivar
+    )
+    results[[class]] <- results.tmp
+  }
+  results
+}
+
+rates <- data.frame(rate.id = c(4,4,4,5,5,5,6,6,6),year=c(rep(1:3,3)),
+                    t.start=c(17,15,7,22,19,4,32,31,10),t.surv=c(8,1,0,5,5,0,2,1,0))
+kendall.mle <- kendall(rates = rates, times = 3, classes = 3, grades = 1000, maxvar = 0.2, minvar = 0.00001, 
+        maxmean = 1, minmean = 0.01)
+
+# These results can be used to estimate g4, 5, and 6 (and the results are pretty close to what M+D get!)
+kendall.mle[[1]][-1] # For example, g4 (the [-1] removes the loglikelihood table from output
+```
+
+The large confidence intervals reflects our poor sample size.
+Note that this approcxah assumes that each vital rate is calculated separately and is difficult to use if you have estimated survival using the logistic regression. 
+In this case, you could use $n_i$ (the number initially alive in a class plus adjoining classes for an effective number of survivors, $n_i s_i$ then use Kendalls's method), or use the numbers for each class separately but this can lead to underestimates of true variation.
+It is also possible to do capture-recapture analysis to directly estimate true environmental stochasticity in vital rates (see Gould and Nichols 1998).
+
+Sampling variation can also influence correlation between vital rates - can deal with this by running PVA with estimated correlations and again with correlations set to zero to observe the effect of correlation patterns on PVA results.
+
+### Extreme variation
+The beta distribution can handle high variation in vital rates; the issue comes when unusual events fall well outside reasonable distributions for vital rates - most reasonable approach is to leave out those years when estimating mean/var and reintroduce during simulations (see Chapter 7's extreme matrices with low probability).
+
+### More complicated growth rates
+
+There are some populations with more than two outcomes of growth/transitions - e.g. golden heather class 4/5 individuals can appear in four different classes in the following year.
+Use a **multinomial distribution** that can encompass multiple possible outcomes. 
+2 problems with this: a) no way to make random variables selected from a multinomial dist. exhibit a specified correlation b) it is not governed by a single parameter describing the prob. of all outcomes and we cannot use the Kendall method.
+
+Solution - *convert multinomial growth rates into binomial ones*.
+In our heather example, convert $g_{i,j}$, the probability that a $j$ individual grows into $i$ class in the next year, into $g_{\ge i,j}$, the probability that a surviving individual in $j$ will be in class $i$ or any larger class. 
+
+For any starting size class, the probability of being in size class $i$ the next year is represented by subtracting the probability of transition to $i+1$ or higher from the probability of transitioning to $i$ or higher (note that these represent probability of growth **given** survival so the probability of a transition to class $i_{min}$, the smallest class that an individual can transition into is **always 1**).
+
+## Simulations to estimate population growth rate and extinction risk
+
+Two major issues using simulation on means and variances:
+
+1. Ignores correlation between vital rates
+2. We need to know the mean, variance, **and sampling distribution** from which it came
+
+This is easier and more realistic than using matrices with fixed elements, however.
+
+### Key distributions for vital rates
+
+**Beta** - appropriate when simulating binary events (survival, 2-outcome growth); we can generate vital rate values that follow a beta dist. with specified mean and var
+
+However, this cannot simulate beta values that are correlated with one another, instead we pick a random value from a beta distribution with parameters $a$, $b$ (transformations of the mean and variance) and some value $p$ between 0-1
+  
+   1. Choose uniform number b'n 0-1; not a random value of $p$ but of $F(p|a,b)$ - now figure out what value $p$ from the beta distribution actually has this randomly chosen value for $F(p|a,b)$
+   2. Pick another random number b'n 0-1, we'll call $x_1$; use the incomplete beta function\*
+   3. If $F(x_1 | a,b)$ is less than $F(p|a,b)$ then pick a a random $x_2$ between $x_1$ and 1
+   4. Recalculate the incomplete beta function with $x_2$
+   5. Repeat steps 3/4 until $F(x_1 | a,b)-F(p|a,b)$ is acceptably small (e.g. 0.001) and the final $x_1$ is a good approximation of $p$
+   
+   
+\* The incomplete beta function gives the probability that a randomly chosen value from the distribution will be less than or equal to $p$, a probability we call $F(p|a,b)$.
+
+```{r}
+betaval <- function(mn, sd,fx){
+  if(sd==0){
+    bb=mn
+  } else {
+    toler <- 0.0001 #This is the tolerance of the answer, how close to the CDF value of the answer be to the input F(x)
+    var <- sd^2
+    if(var >= (1-mn)*mn){
+      print("SD too high for beta")
+      break
+    }
+    # Calculate the beta parameters
+    vv <- mn*((mn*(1-mn)/(var))-1)
+    ww <- (1-mn)*((mn*(1-mn)/var)-1)
+    upval <- 1
+    lowval <- 0 
+
+    # Choose a beginning low guess, x, with a random-ish component
+    x <- 0.5+0.02*(runif(1))
+    # Find the CDF value for x, from https://stat.ethz.ch/pipermail/r-help/2005-December/084477.html
+    # ibeta <- function(x,a,b){pbeta(x,a,b)*beta(a,b)}
+    i <- pbeta(x,vv,ww)
+    
+    # Then search for better values of x until the value has a CDF within the tolerance of Fx
+    while ((toler<abs(i-fx)) & (x >1e-6) & ((1-x)>1e-6)) {
+      if(fx>i){
+        lowval <- x
+        x <- (upval+lowval)/2
+      } else {
+        upval <- x
+        x <- (upval+lowval)/2
+      }
+      # i <- ibeta(x,vv,ww)
+      i <- pbeta(x,vv,ww)
+    }
+    # This makes values of x somewhat random to eliminate
+    # pathologies when variance is very small or large and 
+    # truncates values of x so smallest values are toler and 
+    # biggest equal to 1-toler
+    bbb <- x+toler*0.1*(0.5-runif(1))
+    if(bbb < toler){
+      bbb <- toler
+    }
+    if(bbb > 1){
+      bbb <- 1-toler
+    }
+    bb <- bbb
+  }
+  return(bb)
+}
+
+# Demo
+means <- c(0.5, 0.9)
+# Percentage of max possible s.d. to use
+psds <- c(0.1,0.5,0.9)
+reps <- 1000
+
+results <- data.frame()
+
+# count <- 1
+
+for(meani in means){
+  print(meani)
+  for(psdi in psds){
+    print(paste0("...",psdi))
+    sd <- ((meani*(1-meani))^0.5)*psdi
+    temp <- vector()
+    for(fxi in 1:reps){
+      temp[fxi] <- betaval(mn=meani, sd=sd, fx=runif(1))
+    }
+    results <- rbind(results,data.frame(mean=rep(meani,reps), sd=rep(psdi,reps), fx=temp))
+#    count <- count+reps
+  }
+}
+
+results$mean <- factor(results$mean)
+levels(results$mean) <- c('mean=0.5','mean=0.9')
+
+results$sd <- factor(results$sd)
+levels(results$sd) <- c('sd=0.1','sd=0.5','sd=0.9')
+
+ggplot(results, aes(fx)) + 
+  geom_histogram() +
+  facet_grid(mean~sd)
+```
+
+
+There is another way to do this - create uniformly spaced estimated of beta values for each vital rate e.g. `(0,01, 0,02,...,0.99)`. 
+Then draw random numbers for the $F(p|a,b)$ value of each rate in each year, choose the stored rate with the closest F-value - if there are enough stored values, this doesn't influence the outcome of a stochastic simulation and greatly speeds it up. 
+It also provides the right set-up for correlations between vital rates.
+
+**Lognormal** - appropriate for fertilities
+
+The lognormal is bounded $[0,\inf]$, easiest to generate values from this distribution by simulating normal values and then log-transforming them.
+Mean and var (if we have the mean log rates we can transform them with the second row):
+
+$$ M_{ln} = exp(M_n+\frac{1}{2} V_n),\ \ \  V_{ln} = exp \Big[ 2 \Big( M_n + \frac{1}{2} V_n \Big)\Big]\big[ exp(V_n) -1 \big] \\
+M_n = log(M_{ln})-\frac{1}{2} log \Big( \frac{V_{ln}}{M_{ln}^2} \Big), \ \ \ V_n = log \Big( \frac{V_{ln}}{M_{ln}^2}+1 \Big)
+$$
+
+We can now generate random values from a standard normal distribution and can then create lognormal values.
+
+```{r}
+# In R, there is already a function to generate random lognormal values:
+ggplot(data=data.frame(values=rlnorm(n = 1000, meanlog = 0.6, sdlog = 0.3)))+
+         geom_histogram(aes(values))
+```
+
+**Stretched beta distribution** - the lognormal has no upper limit even though there are biological limits to fertility (especially pertinent with thousands of simulations).
+The stretched beta distribution - a rescaled version of the beta dist - can be skewed downards or truncated to a max value.
+
+If the mean and var of fertility rate, $M_f \ and\  V_f$, are known to be bounded by $f_{min} \ and \ f_{max}$:
+
+$$ M_{beta} = \Big( \frac{M_f - f_{min}}{f_{max}-f_{min}}\Big) \\ V_{beta} = V_f \Big( \frac{1}{f_{max}-f_{min}}\Big)^2
+$$
+These can be used to generate a beta-distributed random variable $B_i$ which can be converted into a stretched beta:
+$$
+S_i = B_i (f_{max}-f_{min})+f_{min}
+$$
+
+### Including correlations in vital rates
+
+1. Making correlated normal values
+   - Start with correlated matrix estimated from vset of vital rate data, `C`
+   - Symmetrical matrices can be decomposed into matrices made of its eigenvalues and corresponding right eigenvectors to preduct ultimate growth rate and structure of a population
+   - Create matrix `W`, whose columns are the right eigenvectors of `C`
+   - Create matrix `D`, whose diagonals are the eigenvalues of `C` with all other elements = 0; the eigenvalue in the $i$th position along the diagonal of `D` is the right eigenvector in column $i$ of `W`
+   - *Note; these can be constructed in MATLAB with `[W,D] = eig(C)`
+   - Generate the square-root matrix, $C^{1/2} = W*D^{1/2}*W'$ $
+   - With $C^{1/2}$ we can take a set of uncorrelated standard normal values and convert them into a set of correlated values. If $m$ is a column vector of $k \ uncorrelated$ random values (where $k$ is the number of vital rates used to compute `C` and `C'`): $y=C^{1/2}*m$ - y now contains $k$ values that are correlated according to the correlation matrix `C`
+
+2. Using correlated normal random variables to generate correlated vital rates with other distributions
+   - By generating multiple $m$ vewctors with different random values and applying the above equation, we can create a new vector of correlated values $y_t$ - this gives us sets of **standard normal values**, what we need are correlated values that are not normally distributed
+   - This is easy for lognormal values (see above)
+   - For other distributions, you need to match the position in the CDF in the normal distribution to the position in the CDF in the new distribution (i.e. if a value is at the 26th percentile in the standard normal, find the 26th percentile in the beta dist):
+```{r}
+print('Values');qnorm(0.26); qbeta(0.26, shape1=0.6, shape2=7)
+```
+```{r}
+print('Cumulative Probability');pnorm(-0.6433454);pbeta(0.01357314, shape1=0.6, shape2=7)
+```
+
+```{r box8.7}
+stnormfx <- function(xx){
+  # These are approximation constants
+  ci <- 0.1986854
+  cii <- 0.115194
+  ciii <- 0.000344
+  civ <- 0.0192527
+  
+  if(xx>=0){
+    z <- xx
+  } else {
+    z <- -xx
+  }
+  a <- 1+(ci*z)+(cii*z*z)
+  b <- (ciii*z^3)+(civ*z^4)
+  w <- a+b
+  if(xx>=0){
+    ff <- 1-1/(2*w^4)
+  } else {
+        ff <- 1-(1-1/(2*w^4))
+  }
+  ff
+}
+stnormfx(1.4)
+```
+```{r}
+betaval(stnormfx(1.4), mn=0.77, sd=0.2^2)
+```
+
+Note that this method does not exactly reproduce the Pearson correlation matrix of the original vital rate estimates because it effectively uses rank correlations (however, introduced errors are small).
+
+**The problem of sparse and incomplete sampling** - estimated correlation matrix is often invalid; if some rates are not measured in some years or if vital rates come from different populations, the set of correlations can be invalid (e.g. all three vital rates can be negatively correlated, which is impossible because two negative correlations should result in a positive corelation).
+
+- The matrix must be **positive semidefinite** = all eigenvalues should be positive or zero (as there are square roots involved)
+- Even if vital rates are based on a single data set in which every vital rate was measured every eyar, the correlation matrix may still not be positive semidefinite if the number of years used to calculate the rates are less than 1+number of vital rates
+- Easiest test: see if the diagonal of `D` contains only positive numbers, or the elements of $C^{1/2}$ are all real numbers (if complex, the original correlation matrix was invalid)
+- To avoid this:
+   1. Avoid using estimated correlations from multiple sources
+   2. If all rates were measured for all $n$ transitions/years, and $n$ is less than the number of vital rates being correlated +1, modify `D` by setting all but largest $n-1$ eigenvalues to zero (should show a clear break in magnitude between the $n-1$ values and the remaining effectively zero values)
+   3. Set all negative eigenvalues in `D` to zero - this is like the last option, only we don't know what `n` might be (i.e. if correlations are calculated from data from different number of years)
+   
+   - Steps 2 and 3 also require recombining `D` with `W` to create a new modified correlation matrix $C_m = W*D_m*W'$ - this is now a covariance matrix with variance estimates on the diagonal that are not equal to 1
+   - Convert it back into a correlation matrix, $C_{final}(i,j) = C_m (i,j)/\sqrt{C_m(i,i)C_m(j,j)}$, then decompose this new correlation matrix to determine the $C^{1/2}$ matrix to use in your stochastic simulations. 
+
+**Autocorrelation and cross-correlation**
+Final issue = between year correlation. 
+Note that cross-correlation is correlation of different rates **across** time steps. 
+
+If there are enough data to measure correlations among different vital rates between years (often the case if you have enough to measure within-year correlations) - easiest way is to create a spreadsheet with a block of values for each vital rate (columns) by year (rows) and calculate pairwise correlations among the columns for within-year correlations; then do the same after copying all but the first for of this block to the adjacent columns in the spreadsheet moved one row up, delete the last row of the first block, and again compute all correlations between columns.
+This includes both within-year and across-year correlations, look only at the cross-correlations and note that the correlation between vital rate $a$ in year $t$ and vital rate $b$ in year $t+1$ need not be the same as the correlation of rate $b$ in year $t$ and rate $a$ in year $t+1$. 
+This only looks at lag-1 autocorrelation, more data are required for longer lags.
+
+Adding this to a stochastic simulation is difficult - one possibility is to simulate the first year's vital rates, then generate a new set in the next year with a certain pattern of correlations. 
+
+If we estimated the correlations for vital rates $a\ and\ b$, with a column for $a(t), b(t), \ a(t+1),\ and \ b(t+1)$, the matrix of correlations and autocorrelations will be:
+$$
+E=\begin{bmatrix} 
+1 & r(b_t, a_t) & a(a_{t+1},a_t) & r(b_{t+1},a_t) \\
+r(a_t,b_t) & 1 & a(a_{t+1},b_t) & r(b_{t+1},b_t) \\
+r(a_t,a_{t+1}) & r(b_1,a_{t+1}) & 1 & r(b_{t+1},a_{t+1}) \\
+r(a_t,b_{t+1}) & r(b_1,b_{t+1}) & r(a_{t+1},b_{t+1}) &1 \\
+\end{bmatrix}
+$$
+Upper left and lower right corners contain only within-year correlations, but while the upper left estimates use the full dataset the lower right use the lagged data and are based on one fewer years of observation.
+Therefore replace these values with ones from the upper left elements of the matrix and make an $E_{final}$ matrix that is positive semidefinite as above. 
+
+Extract the two pieces of $E_{final}$, the upper-right and lower-right quarters:
+$$
+C=\begin{bmatrix} 
+1 & r(b_t, a_t) \\
+r(a_t,b_t) & 1 
+\end{bmatrix}
+and \
+B=\begin{bmatrix} 
+r(a_t,a_{t+1}) & r(b_t, a_{t+1}) \\
+r(a_t,b_{t+1}) & r(b_t, b_{t+1})
+\end{bmatrix}
+$$
+We can now make a matrix of correlations that span many years assuming that all correlations more than a year apart are caused by lag-1 correlations. 
+
+$$
+M=\begin{matrix} 
+\\Year1\\Year2\\Year3\\Year4
+\end{matrix}
+\ 
+\begin{bmatrix}Year1&Year2&Year3&Year4\\
+C & B' &(B')^2 & (B')^3 \\
+B&C&B'&(B')^2 \\
+B^2 & B &C &B' \\
+B^3 & B^2 & B & C\\
+\end{bmatrix}
+
+$$
+
+To simulate autocorrelations and cross-correlations with high accuracy, we need to construct $M$ for dozens or more years given the estimates for $C$ and $B$. 
+
+Box 8.9
+```{r}
+lnorms <- function(means,vars,rawelems){
+  nmeans <- log(means)-0.5*log(vars/means^2+1)
+  nvars <- log(vars/means^2+1)
+  normals <- rawelems*sqrt(nvars)+nmeans
+  lns <- exp(normals)
+  return(lns)
+}
+
+stretchbetaval <- function(mn,sd,minb,maxb,fx){
+  if(sd==0){
+    bb<-mn
+  } else {
+    mnbeta <- (mn-minb)/(maxb-minb)
+    sdbeta <- sd/(maxb-minb)
+    # Check for undoable parameter combos
+    if(sdbeta < (mnbeta*(1-mnbeta))^0.5){
+      bvalue <- betaval(mnbeta,sdbeta,fx) # Find beta value
+      bb <- bvalue*(maxb-minb)+minb # Convert to stretched value
+    } else {
+      print('The sd is too high for the mean')
+      print('For a vital rate with the following')
+      print('mean, sd, and min/max values:')
+      print(c(mn,sd,minb,maxb))
+      print('The maximum SD possible is:')
+      print((mnbeta*(1-mnbeta))^0.5*(maxb-minb))
+      bb <- NaN
+    }
+  }
+  return(bb)
+}
+
+BetweenYrCorr <- function(vrmeans, vrvars, vrmins, vrmaxs, corrin, corrout,yrspan,tmax){
+  np <- length(vrmeans)
+  results <- vector()
+  M <- matrix(nrow=yrspan, ncol=yrspan)
+  
+  # This set of loops creates the big correlation matrix M with multi-year correlations
+  # Always assume that all long-time-lags are only caused by within-year and lag-1 correlations
+  for(ii in 1:yrspan){
+    for(jj in 1:yrspan){
+      if(ii==jj){
+        litmx <- corrin
+      } else {
+        litmx <- corrout
+      }
+      expo <- 1
+      if(ii>jj){
+        expo <- ii-jj
+        litmx <- (litmx)^expo
+      } else if(ii<jj){
+        expo <- jj-ii
+        litmx <- t(litmx)^expo
+      }
+      for(ip in 1:np){
+        for(jp in 1:np){
+          M[ip+np*(ii-1),jp+np*(jj-1)]=litmx[ip,jp]
+        }
+      }
+    }
+  }
+  eigen.res <- eigen(M)
+  W <- eigen.res$values
+  D <- eigen.res$vectors
+  
+  # Check for negative eigenvalues
+  check <- (min(minD))
+  if(check < 0){
+    print(paste0("The minimum eigenvalue is ", check,". Approximation continuing."))
+    maxneg <- max(max(abs(D[which(D<0)])))
+    # Set negatives to 0
+    D[which(D==maxneg)] <- 0
+    newfullmx <- W*D*t(W)
+    for(ii in 1:np){
+      for(jj in 1:np){
+        if(newfullmx[ii,jj]==0 | newfullmx[jj,ii]==0){
+          newfullmx[ii,jj]=0
+        } else {
+          newfullmx[ii,jj] <- newfullmx[ii,jj]/(newfullmx[ii,ii]*newfullmx[jj,jj])^0.5
+        }
+      }
+    }
+  eigen.res <- eigen(newfullmx)
+  W <- eigen.res$values
+  D <- eigen.res$vectors
+  }
+  M12 <- W*abs(D^0.5)*t(W)
+  # Not certain about this one, it uses zfull which we have not initialized
+  sz <- nrow(M12)
+  
+  # Get lines from the middle of M12 to generate correlations
+  startcase <- round(yrspan/2)*np+1
+  zvalold <- Re(M12[startcase:(startcase+np-1),])
+  zvalnew <- Re(M12[(startcase+np):(startcase+2*np-1)])
+  newns <- rnorm(n=sz)
+  oldxy <- zvalold*newns
+  
+  normresults <- data.frame()
+  vitalresults <- data.frame()
+  
+  # Loop to create multiple sets of rates
+  for(tt in 1:tmax){
+    print(paste0('Time is ',tt))
+    # Update the uncorrelated random normals
+    newns <- c(newns[(np+1):sz],rnorm(n=np))
+    # Make the new set of correlated normals
+    newxy <- zvalnew*newns
+    normresults <- rbind(normresults, t(oldxy), t(newxy))
+    # Make the new correlated rates old
+    oldxy <- newxy
+    
+    # Convert correlated normals to correct distributions
+    vrate1 <- betaval(vrmeans[1],(vrvars[1]^0.5),stnormfx(newxy[1]))
+    vrate2 <- lnorms(vrmeans[2],vrvars[2],newxy[2])
+    vrate3 <- stretchbetaval(vrmeans[3],vrvars[3]^0.5, vrmins[3],vrmaxs[3],stnormfx(newxy[3]))
+    vitalresults <- rbind(vitalresults,c(vrate1,vrate2,vrate3))
+  }
+  print("The input correlations (all rates and one step:")
+  print(corrin, t(corrout),corrout,corrin)
+  print("The correlations of the normals are:")
+  print(cor(normresults))
+  print("Input means and variances are:")
+  print(c(vrmeans, vrvars))
+  print("Means and variances of the simulated rates are:")
+  print(mean(vitalresults))
+  print(var(vitalresults))
+}
+```
+
+In this example, we have 3 vital rates over 50 years (this makes M a 150x150 matrix). 
+We must then make sure it is positive semidefinite and then find its square root. 
+If we wanted to simulate all vital rates for years represented in $M$ and $M^{1/2}$, we would generate a column vector of 150 uncorrelated standard normal values $m$ and then multiply $M^{1/2}$ by $m$ to generate 150 correlated normal values. 
+This would work if the number of vital rates and length of simulation are small, but could result in a truly massive $M$ matrix. 
+It may be more feasible to use a trick to generate one year of vital rates at a time:
+
+1. Choose a set of $n$ (number of vital rates) that are in the very middle of $M^{1/2}$; this makes a 3x150 matrix we call $M^{1/2}_{1\ year}$. We don't need the rest of the matrix and can clear it from memory.
+2. For year 1, make column vector $m_1$ of standard normal random numbers (150 rows, 3x50 years), then multiply by $M^{1/2}_{1\ year}$ for estimates of vital rates in year 1.
+3. Make anew vector $m_2$ that is largely (but not completely) the same as $m_1$ - all values except for the first $n$ are the first $n(y-1)$ rows of $m_2$, where $y$ is 50 years. In other words, throw out the first three entries in $m_1$ and place three new random numbers in the last three rows.
+4. Multiply $M^{1/2}_{1 year}$ by $m_2$ for rates in year 2. 
+5. Repeat steps 3 and 4 for each year.
+
+This works because $M$ is symmetrical (numbers in block of rows corresponding to one year's vital rates are the same as those one block of rows below but offset by $n$ columns).
+This only breaks down at the R/L edges of the matrix.
+The second key feature is that the correlations on the right and left edges are very small (i.e. there are many many years, so the correlations from year 1 to year 30 are small), so only small errors are introduced (how many years are enough depends on the strength of the correlation matrix).
+
+Keep in mind we are working with $M^{1/2}$, which does not have as clear a biological interpretation as $M$. 
+
+### Model results for 2 examples
+Let's estimate stochastic growth rates and the CDF of quasi-extinction for *H. montana* - we have estimated growth rates and used Kendall's method to re-estimate survival rates.
+*Note: because there was little information about temporal variation in survival and growth of seeds and seedlings in classes 1 and 2, they were kept as raw numbers rather than broken into vital rates and correlations were not calculated.* 
+For all growth and survival rates in classes 3-6, they claculated between-year correlations (with the minimum required four years of data). 
+
+**I do not have the data required to build box 8.10 (`hudcorrs` or `hudmxdef`), but they are available in the `popbio` package**:
+```{r}
+# From the popbio documentation
+library(popbio)
+data(hudvrs)
+data(hudcorrs)
+## set vrtypes
+hudvrtypes <- c(rep(1,13), rep(3,5), rep(1,6))
+## run Full model- using 100 runs here for speed
+full <- vitalsim(hudvrs$mean, hudvrs$var, hudcorrs$corrin,
+                 hudcorrs$corrout, hudmxdef, vrtypes=hudvrtypes,
+                 n0=c(4264,3,30,16,25,5), yrspan=20 , runs=100)
+## deterministic and stochastic lambda
+full[1:2]
+```
+```{r}
+## log stochastic lambda
+log(full$stochLambda);paste0("SD: ",sd(full$logLambdas))
+```
+```{r}
+# SKIP the next two simulations- however, sample output is included for plotting
+# NO between year correlations so corrout = diag(0,13) - all zeros
+# no.between <- vitalsim(hudvrs$mean, hudvrs$var, hudcorrs$corrin,
+# diag(0,13), hudmxdef, vrtypes=hudvrtypes,
+# n0=c(4264,3,30,16,25,5), yrspan=20 )
+no.between <- list(CDFExt=c(rep(0,40),0.01,0.04,0.12,0.15,
+0.20,0.31,0.49,0.58,0.72,0.78))
+#NO correlations so corrout = diag(0,13) AND corrin=diag(13) - ones on diagonal
+# no.corr<-vitalsim(hudvrs$mean, hudvrs$var, diag(13),
+# diag(0,13), hudmxdef, vrtypes=hudvrtypes,
+# n0=c(4264,3,30,16,25,5), yrspan=20 )
+no.corr <- list(CDFExt=c(rep(0,39),0.03,0.03,0.06,0.12,0.20,
+0.30,0.42,0.52,0.65,0.76,0.83))
+## Figure 8.3 with corrected correlation matrices for full model
+matplot(cbind(a=full$CDFExt, no.between$CDFExt, no.corr$CDFExt), type='l',
+ylim=c(0,1), lty=1:3, col=2:4, lwd=2, las=1,
+xlab="Years into the future", ylab="Cumulative probability of quasi-extinction")
+legend(2,1, c("Full model", "No between-year correlations", "No correlations"),
+lty=1:3, col=2:4, lwd=2)
+```
+
+Removing auto- and cross-correlations increases stochastic growth ($\lambda_s = -.9546$) and decreased extinction risk, but simulations without any correlations had similar results to those with only within-year correlations and somewhat higher risk @50 years (maybe between-year correlations are more important for viability than within-year).
+
+## Simulating demographic stochasticity
+
+Yet another issue is how to include demographic stochasticity in vital rates. 
+In many cases, the quasi-extinction threshold is high enough to obviate this, but it can be included through Monte-Carlo simulations (independent choises are based on the same mean vital rates). 
+This can greatly slow a program, however, and most PVAs use a cutoff in population size or the size of one or more classes (issue: demographic stochasticity is gradual, not a suddent cutoff).
+A safe rule is to do MC when the population or a given class is below 50 individuals, with the following possible techniques:
+
+1. Survival/growth rates - pick a uniform random number and compare its value to the probability of different fates an individual might experience (can be done after multiplying all survival and growth rates to get probabilities of all fates) = a set of multinomial probabilities.
+2. Reproduction - more difficult. 
+The fecundity elements of a matrix include growth **and** survival; if estimated separately we can do the same procedure as above (e.g. post breeding census). Then simulate realized fertility of each survivor to simulate individual fertilities (multinomial variable or Poisson discrete distributions - Poisson probably less useful due to independence assumption - births are independent of one another). If fertilities include some element of survival, you can use a lognormal or stretched beta distribution.
+
+In some cases, the sums of individual random fates can create a distribution of summed fertilies of all members of a whole class, allowing you to pick a random variable for fertility rather than one for each individual. 
+It is important to first check for variance between individuals - in good years, there may be higher variance than in bad years; if this is the case, individual variation should be modelled as a function of mean fertility in that year with unfixed variance.
+
+```{r}
+data(whale)
+x<-splitA(whale)
+whaleT<-x$T
+whaleF<-x$F
+multiresultm(c(1,9,9,9),whaleT, whaleF)
+multiresultm(c(1,9,9,9),whaleT, whaleF)
+## create graph similar to Fig 15.3 a
+reps <- 10 # number of trajectories
+tmax <- 200 # length of the trajectories
+totalpop <- matrix(0,tmax,reps) # initializes totalpop matrix to store trajectories
+nzero <- c(1,1,1,1) # starting population size
+for (j in 1:reps){
+  n <- nzero
+  for (i in 1:tmax){
+    n <- multiresultm(n,whaleT,whaleF)
+    totalpop[i,j] <- sum(n)
+  }
+}
+matplot(totalpop, type = 'l', log="y",
+xlab = 'Time (years)', ylab = 'Total population')
+```
+
+
+## Including density dependence in matrix models
+
+It is trickier to include density dependence in demographic PVAs: we rarely have enough years of vital rate estimates (more expensive than count-based studies), many more variables that are potentially density dependent compared to counts.
+
+Three important questions:
+
+1. Which vital rates are density dependent?
+2. How do those rates change with density?
+3. Which classes contribute to the density that each vital rate "feels"?
+
+We will not usually be in a position to compare multiple density-dependent functions fit to each of the vital rates using many combinations of classes to estimate density (e.g. juvs alone, juvs+adults, etc.). 
+
+There are two more limited approaches:
+
+1. Placing a limit on the size of one or more classes: Assume there is a max number of individuals in one or more classes (or the population as a whole); equivalent to the ceiling model
+2. Choose one or at most a few vital rates (dependent on direct data, experiments, natural history knowledge, or comparison with similar taxa) suspected to be strongly density dependent and model these with density-dependent functions
+
+### 1. Placing a limit on the size of one or more classes
+
+This can be done with historical data on the largest number of individuals ever observed in a given area, but is unlikely to be obvious for many threatened species. 
+Territorial species' max density can be estimated as the number of available territories, which can restrict the maximum size a population can reach.
+
+**Gaona et al.'s lynx PVA** - included demographic stochasticity, assumed (on the basis of little to no data) that periodic droughts would occasionally depress the survival of the youngest.
+
+4 female classes: cubs (born in pulse before census), juveniles (at the end of their first year of life), floaters (mature females without territories), and breeders. 
+The population is restricted by the number of territories.
+
+Our projection matrix:
+$$
+E = \begin{bmatrix}
+0 & 0 & 0 & b*c*p*s_4 \\
+s_1 & 0 & 0 & 0 \\
+0 & s_2(1-g) & s_3(1-g) & 0 \\
+0 & s_2g & s_3g & s_4 
+\end{bmatrix}
+$$
+Where $s_i$ is survival rate of individuals in $i$, $b$ is the probability that a territory-holding female will breed in a given year, $c$ is the # of cubs, $p$ is the proportion of cubs that are female. 
+Density dependence acts on $g$, the the probability that a surviving juvenile or floater will acquire a territory next year. 
+There are $K$ territories, just before the birth pulse that precedes census $t+1$ is $s_4 n_4(t)$ breeding females and $K-s_4 n_4(t)$ territories. 
+
+The probability that a class 2/3 female becomes class 4 at $t+1$ is $g=[K-s_4 n_4(t)]/[s_3 n_3 (t) + s_2 n_2 (t)]$, the divisor includes juveniles and floaters looking for territories. 
+$1-g$ floaters remain floaters, and the floaters that do gain a territory do not breed in that year ($a_{1,3}=0$).
+
+```{r}
+# Lynx function
+s1min <- 0.2 # Class 1 survival in bad years
+ds1 <- 0.3 # Class 1 survival in good years = s1min + ds1
+freqbad <- 0.1 # Frequency of bad years, only affects cubs
+
+s2 <- 0.7
+s3 <- 0.7
+s4 <- 0.86
+
+f4 <- 0.5*0.6*2.9 #  Reproduction of breeders, mean litter size = 2.9
+
+Ks <- c(1,2,3,4,6,8,10)
+imax <- length(Ks)
+
+n0 <- c(4,2,0,5)
+Nx <- 2 # QE threshold
+tmax <- 50
+numreps <- 1000
+
+probext <- vector()
+for(i in 1:imax){
+  print(i)
+  K <- Ks[i]
+  Ns <- vector()
+  for(rep in 1:numreps){
+    if(rep%%100==0){ print(paste0("...",rep))}
+    n <- data.frame(class1=n0[1],class2=n0[2],class3=n0[3],class4=n0[4])
+    for(t in 2:tmax){
+      s1 <- s1min+ds1*(runif(1)>freqbad)
+      n2 <- sum(runif(n=n[(t-1),1])<s1)
+      n3 <- sum(runif(n=n[(t-1),2])<s2)+sum(runif(n=n[(t-1),3])<s3)
+      n4 <- sum(runif(n=n[(t-1),4])<s4)
+      n1 <- round(f4*n4)
+      newbreeders <- min(c(n3, K-n4))
+      n3 <- n3-newbreeders
+      n4 <- n4+newbreeders
+      n <- rbind(n,c(n1,n2,n3,n4))
+      N <- sum(n[t,])
+      if(N <= Nx){
+        break
+      }
+    }
+    Ns <- c(Ns, N)
+  }
+  probext <- c(probext,(sum(Ns<=Nx)/numreps))
+}
+
+probext
+plot(probext~Ks, type='l')
+```
+
+The number of available patches has a massive impact on the probability of species' quasi-extinction. 
+The reason for this is that few individuals can escape the zone in which demographic stochasticity is strong, which leads to a large proportion of the individuals dying by chance in a single year.
+
+### 2. Estimating and incorporating density dependent functions for vital rates in a demographic PVA
+
+The second approach beings by hypothesizing that one or more vital rates critically depend on density. 
+
+Samlon example - salmon survival may depend on the initial number of eggs in a spawning stream (and indirectly on the number of spawning adults).
+If the number of suitable redds (nests) are limited, late spawners will destroy the redds of earlier spawners, high egg density results in less oxygen and increased egg mortality and greater fry competition for food and reduced first year survival.
+
+We can use regression to see if survival is related to the initial number of eggs, e.g. the Ricker function:
+$$
+s_0[E(t)] = s_0(0)exp[-\beta E(t)]
+$$
+
+Where $s_0[E(t)]$ represents survival of eggs to become one-year old fish as a function of initial density of eggs at time $t$, $E(t)$, $s_0(0)$ is the survival rate when eggs are close to zero, and $\beta$ describes the decline in survival as egg number increases.
+The easiest way to estimate these parameters is to perform a linear regression of log survival against egg number to estimate $-\beta$, the slope of the relationship, and $log[s_0(0)]$ is the intercept. 
+
+Another option is Beverton-Holt:
+$$
+s_0[E(t)] = \frac{s_0(0)}{1+\beta E(t)}
+$$
+
+This can also be fit with linear regression using the inverse of survival as the dependent variable and $E(t)$ as the independent variable. 
+The inverse of the intercept is an estimate of $s_0(0)$m slope divided by the intercept estimates $\beta$. 
+
+We can use $AIC_c$ to decide between these models, but the demographic study is short and there are few estimates of vital rates.
+One way to decide is to consider how the predicted number of survivors differs between two functions when the initial number of eggs is high (survival rate times initial eggs): BH is **compensatory**, predicts number of survivors reaches an asymptote (increase in egg number is exactly compensated by increase in the number of eggs dying once an asymptote is reached); Ricker predicts that # survivors will increase then decrease as egg density continues (**overcompensation**).
+
+Density dependence would be compensatory if there is max # of redds, if a redd that displaces another yields the same # of hatchlings, and if displacement is the only form of DD (for this reason, territorial species are often represented with BH).
+If DD is caused by oxygen depletion or competition for food, most eggs may die of anoxia or suboptimal food (overcompensation, Ricker). 
+Looking at survival changes with density can clear up which is more appropriate, but it may have to be guessed based on biological knowledge.
+
+Then, substitute the density-dependent function into the correct places in the projection matrix. Assume a pre-spawning census, classes are females aged 1-5, and females can spawn at ages 3,4,5 (and must spawn by 5, as they are semelparous). 
+If $b_i$ is the probability that a female of age $i$ chooses to spawn $f_i$ eggs with $s_i$ survival rate at that age:
+$$
+E(t) = \sum^5_{i=3}{b_if_in_i(t)}
+\\
+\\
+and
+\\
+\\
+A = \begin{bmatrix}
+0&0&b_3f_3s_0[E(t)]&b_4f_4s_0[E(t)] & f_5s_0[E(t)] \\
+s_1 & 0&0&0&0\\
+0&s_2&0&0&0\\
+0&0&s_3(1-b_3)&0&0\\
+0&0&0&s_4(1-b_4)&0
+\end{bmatrix}
+$$
+The density dependent function $s_0[E(t]$ appears in all reproduction elements.
+
+```{r}
+# Salmon density dependent vpa
+n0 <- c(0.7767,0.6163,0.4945,0.3524,0.1309)
+s0 <- 0.002267 # maximum egg survival
+beta <- 0.001 # density dependent egg survival parameter
+
+s <- rep(0.8,4) # Survival probabilities
+b <- c(0,0,0.112,0.532,1) # Probability of breeding at each age
+f <- c(0,0,3185,3940,4336) # Eggs per breeding female
+tmax <- 100
+eggsurv <- 1 # Set this to 1 for ricker egg survival, 2 for BH
+
+n <- data.frame(age1=c(n0[1],rep(NaN,tmax)),
+                age2=c(n0[1],rep(NaN,tmax)),
+                age3=c(n0[1],rep(NaN,tmax)),
+                age4=c(n0[1],rep(NaN,tmax)),
+                age5=c(n0[1],rep(NaN,tmax)))
+spawners <- vector()
+
+for(t in 1:tmax){
+  eggs <- sum((b*f)*n[t,])
+  if(eggsurv==1){
+    n[t+1,1] <- eggs*s0*exp(-beta*eggs)
+  } else if(eggsurv==2){
+    n[t+1,1] <- (eggs*s0)/(1+beta*eggs)
+  }
+  n[t+1,2:5] <- s*(1-b[1:4])*n[t,1:4]
+  spawners <- c(spawners,sum(b*n[t+1,3:5]))
+}
+plot(spawners~c(1:tmax), type='l',main='Ricker')
+```
+```{r}
+eggsurv <- 2 # Set this to 1 for ricker egg survival, 2 for BH
+
+n <- data.frame(age1=c(n0[1],rep(NaN,tmax)),
+                age2=c(n0[1],rep(NaN,tmax)),
+                age3=c(n0[1],rep(NaN,tmax)),
+                age4=c(n0[1],rep(NaN,tmax)),
+                age5=c(n0[1],rep(NaN,tmax)))
+spawners <- vector()
+
+for(t in 1:tmax){
+  eggs <- sum((b*f)*n[t,])
+  if(eggsurv==1){
+    n[t+1,1] <- eggs*s0*exp(-beta*eggs)
+  } else if(eggsurv==2){
+    n[t+1,1] <- (eggs*s0)/(1+beta*eggs)
+  }
+  n[t+1,2:5] <- s*(1-b[1:4])*n[t,1:4]
+  spawners <- c(spawners,sum(b*n[t+1,3:5]))
+}
+plot(spawners~c(1:tmax), type='l', main='Beverton-Holt')
+```
+
+The two models can produce dramastically different dynamics: when egg survival is described by BH, the population reaches equilibrium regardless of the magnitude of fertilities.
+
+The Ricker function cycles spawner numbers when the fertilities are high and undergo chaotic fluctuations when fertilities are high.
+When density dependence is overcompensatory, very complex dynamics can result (high to low density oscillates). 
+
+In both of these models, $\lambda$ cannot exceed 1 (unlike density indepent models), there is no simple metric of stochastic (or nonstochastic) growth rate because the matrix changes as a function of overall density and the relative numbers in different classes. 
+
+This has an ultimate extinction of 1, therefore, which increases with the introduction of stochastic factors. 
+There are not enough data to know which of the Ricker or BH model is true, but as is the case with many other models it is best to test all models and then see how the results are affected.

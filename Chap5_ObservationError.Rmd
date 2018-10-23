@@ -3,6 +3,12 @@ title: "Chapter 5 - Accounting for Observation Error in Count-Based VPAs"
 author: Mairin Deith
 output: html_document
 ---
+<!--
+%\VignetteEngine{knitr::knitr}
+%\VignetteIndexEntry{natserv vignette}
+%\VignetteEncoding{UTF-8}
+-->
+=====
 
 Previous chapters showed how to account for demographic stochasticity and density dependence. 
 Chapter 5 deals with **observation error**. 

@@ -1,0 +1,234 @@
+---
+title: "Chapter 10 and 11 - Population dynamics across multiple sites"
+author: Mairin Deith
+output: html_document
+---
+
+# 10. Interactions of dispersal and environmental correlation
+
+- multiple population analysis can identify how likely an entire population is to go extinct, and how they should be clumped together in space to increase viability
+- models can be quite complicated, but often the data do not include the right types of information to create these models
+   - there are **count-based**, **count-based**, and **patch-based** approaches
+
+### Terminology
+- **Population** = a group of individuals living on a site
+- **Multi-site/total population** = the individuals across all sites (a subset of which is a **metapopulation**)
+- **Movement** = any form of dispersal, colonization, etc. that results in an individual moving from one population to another and surviving long enough to breed or be censused there (**dispersers** leave a community, **colonizers** reach an unoccupied site and form a new population)
+
+### Multi-site data needs
+
+1. Site-specific population dynamics
+   - if a single population has a very low probability of extinction, the total population is likely given high viability; however, just because a population has low viability does not mean it is unimportant to the total population's persistence
+   - if data are not available for all populations, it is common to assume equal vital rates across all populations, but that carrying capacity differs across sites
+   - another approach is to assume that most demographic rates are identical across sites, but to allow a handfull of rates (about which more information is available) to differ
+
+2. Correlations in population growth rates/vital rates across sites
+   - if vital rates are highly positively correlated, there is little benefit to having multiple populations as each will decline in lockstep, this actually increases the risk of extinction of the total population compared to no correlation
+   - negative correlations can be stabilizing (e.g. if rainfall on one side of a mountain causes lower survival of butterflies, the other side of the mountain may have improved survival)
+   - in general, species will show positive correlations especially in nearby populations; at more than 100-200km apart, these correlations tend to disappear
+   - Estimating correlations:
+      - *Correlation in population growth rates with demographic/count-based data*: census the different population growth rates at each site and calculate simple (i.e. non-spatial; we are not interested in how the relationship changes with distance so much as differs between two places) correlation (however, this is complicated if animals disperse and introduce negative correlation, and density dependence, dispersal, and environmental correlation interact nonadditively to create correlated population dynamics - it may be possible to reassign migrants to their original populations to reduce bias in correlation estimates)
+      - *Patch-based data*: when we have only static presence/absence of populations at different sites - strong aggregation of extant populations may result from high movement rates from a lucky neighbourhoods or strong spatial correlations in extinction risk
+         - both dispersal and correlated environmental factors can generate spatial correlations in population behaviour
+         - create *M* distance classes with boundaries $d_0, d_1,...,d_M$ where distance class $k$ includes all distances $<d_k \ and\  >d_{k-1}$
+         - each site $i$ has a binary variable $x$ indicating whether it is inhabited or not - create a contingency table for each distance class $k$, recording each combination of fates (e.g. yes-yes, yes-no, no-yes, no-no) - we get a total sample size twice the actual number of pairings because each pair is permuted (e.g. A:B, and also B:A, but not B:B or A:A)
+         - this is a *join-count* method 
+         - to assess significance, randomly shuffle the pairs (without replacement) and compare the rank or percentile of the observed values for each type of pair (y:n, y:y, etc.), high or low percentiles indicate significant correlations for each pair (e.g. if the percentile for yes-yes pairs at small distances is 97%, there is a 3% chance that the observed pattern would have arisen randomly)
+         - *box 10.1*
+      - More generally, join counts are an exploratory tool to look for the scale or type of pattern in patch-level data **prior to fitting a process-based model**
+      - *Estimating correlations in population growth with little to no direct data* - often too few years of data to make useful estimates of betwee-site correlations, or no data on some populations at all
+          - if there is some inkling that a certain ecological phenomena is responsible for correlation, you can use that to infer negative or positive correlations (and simulate the effect of strong vs. weak correlations in rates)
+          - it's also reasonable to guess that closer populations are going to be more strongly correlated
+          - **Safest option**: assume no negative correlations, vary the strength of positive correlations over a fairly wide range
+
+3. Rates of movement between sites
+   - Note: often the most interesting thing we want is maximum dispersal distance, but these methods all overestimate the long tail of the dispersal curve - it is necessary to take this into consideration and adjust 
+   - **quantify with capture-recapture analysis** (how many individuals successfully dispersed to another population), estimate the actual numbers of individuals in each class including those not directly seen
+      - common assumption - dispersal probability declines as a negative exponential f'n of distance
+      - to fully account for movement rates, we need estimates of the fraction of individuals leaving the release site and fraction that survive to reach another site
+      - it's important to include sex and age - a fertilized female can make a new population, male cannot; dispersal may occur only at certain ages or stages
+      - density dependence may influence probability of dispersal and survival
+    - **quantify with extrapolation from individual behaviour** - three strategies
+    
+    1. Change in dispersal distance as a function of time can estimate a *diffusion coefficient*, useful for making a *dispsersal curve*; some estimate of mortality during search is also needed, as search is often quite dangerous the longer a searcher disperses the greater the chance it will die before reaching a new location (therefore the tail of the dispersal curve likely needs truncation)
+    2. Calculate turn angles, move lengths, and time between turns to extrapolate and create random walkers with virtual dispersal behaviours - key problem is identifying the long tail of the dispersal curve
+    3. For propagules, models of air or ocean current can help identify where individuals will end up according to passive movement
+    
+    - **quantify with genetic data** - need to untangle the effects of local selection with that of dispersal
+    - **quantify with patterns in site occupancy** - simply knowing which patches are occupied or how this has changed over time can indicate colonization rates and population extinction probabilities; first you need to identify which habitats truly are habitat (i.e. which can support species)
+    - **No data?** - use similar species, or make a defensible (if qualitative) description of movement patterns
+    
+### Schematic breakdown of multi-site simulations
+- If one or more of the populations have a very low risk of extinction in isolation, the total population is unlikely to face extinction (therefore it may not be worth it to conduct a multi-site PVA)
+
+| Correlations in population-specific vital rates |  | Movement rates |  |
+|-------------------------------------------------|---------------------------------------------------------------------------------------------------|-----------------------------------|--------------------------------------------------------------------|
+|  | ~None | Low-Medium | Medium-high |
+| Significantly negative | Separate populations, contrasting environmental drivers; multiple populations strongly beneficial | Highly effective metapopulation | Multiple sites, very different habitat effects, one population |
+| Not different from zero | Separate populations, uncorrelated fates; multiple populations beneficial | Somewhat effective metapopulation | Multiple sites, somewhat different habitat effects, one population |
+| Significantly positive | Separate populations, shared fates; multiple populations not very effective | Ineffective metapopulation | One population |
+
+If there is no correlation between populations, the probability of multi-site extinction is the product of each population's extinction probability. 
+If there is high movement rate, a single population PVA may be more appropriate to capture viability (a good way to test if there is enough movement is to consider if progeny of individuals living in different sites are thoroughly mixed).
+
+Overall, if spatial proximity increases movement and correlation in growth rates (and if positive correlation increases probability of joint extinction), the issue is much more complicated than a simple metapopulation assumption (i.e. that more populations = less risk of extinction). 
+
+# Chapter 11. Methods of VA for spatially structured populations
+
+## Patch-based approaches
+- unlikely to be appropriate if movement rates are high, since true population dynamics are more important in governing overall viability and are likely to be poorly estimated by local extinction and colonization; therefore patch-based approaches are common in cases with low to moderate low movement (i.e. true metapopulations)
+
+### Structure and fitting of patch based models
+- **Incidence function approach** - use patterns of patch occupancy over time and space ("incidence") to estimate the probability of extinction $E_i$ for habitat patch $i$ when it is occupied, and colonization $C_i$ when it is not
+   - this takes into account habitat area, proximity to other populations (which alter colonization and extinction rates via dispersal probabilities):
+   
+$$
+E_i = \frac{e}{A_i^x}; \ \ \ 
+C_i = \frac{M_i^2}{M_i^2 + y^2}
+$$
+where $A_i$ is habitat area, strenght of the relationship between extinction and area given by $x$; and $M_i$ is the number of arriving migrants divided by the realized migrants, scaled by $y$:
+
+$$
+M_i = \sum^N_{j \neq i} \beta A^b_j exp(-\alpha D_{ij}p_j)
+$$
+The number of migrants reaching site $i$ depends on the sum of all other N-1 sites ($j$)of a per-unit-area migrant production rate $\beta$ multiplied by each site's area (scaled by $d$) and discounted by distance (scaled by $\alpha$) times the probability of a site actually having a population, $p_j$
+
+If we assume the occupancy patterns are very near their equilibrium values, this can be expressed:
+$$
+J_i = \frac{C_i}{C_i + E_i (1-C_i)}
+$$
+**BUT!** This assumes stability - which guarantees that there wil be no evidence that the metapopulation is actually declining. Also there are certainly many other factors that influence this relationship; habitat quality, food species, competition, predators, etc. and while these can be added they change the structure of the incidence function and can make formulation very cumbersome and difficult.
+
+- **logistic regression** - estimate site-specific probabilities of colonization and extinction based on generalized logit functions to predict probabilitiy as a function of various independent variables:
+
+$$
+E_i = \frac{exp(a+bA_i+cI_i)}{1+exp(a+bA_i + cI_i)}; \ more\ generally \ E_i = \frac{exp(u_c)}{1-exp(u_e)}
+$$
+where $I_i$ is an isolation measure (e.g. harmonic mean distance to other extant populations), $a, b, c$ are fitted coefficients. 
+$u_c$ and $u_e$ are linear functions of continuous or categorical explanatory variables (e.g. habitat size, quality, year of observation, lat, lon, isolation) - note that because the function is exponential, these covariates have a multiplicative effect on $E_i$. 
+
+- **fitting patch-based models** - maximum likelihood and information criterion for both logistic regression and incidence function
+   - need records of location/size of ALL suitable patches (other things are useful but not necessary)
+   - also need a reasonable # of occupied and unoccupied patches (if extinction or colonization are rare, we need more of these patches so we can observe multiple extinction/colonization events)
+   - Example - assume two surveys have been conducted; $O$ are occupied in the initial survey ($N-O$ unoccupied out of $N$ total), then use information from $O$ initially occupied patches
+   - The log-likelihood of the $E$ function with specific coefficient values in $u_E$ is the sum of log-transformed probabilities:
+   - $logL_E = \sum^O_{i=1}[f_i log(E_i)+(1-f_i)log(1-E_i)]$, where $f_i$ is the binary fate of the population in patch $i$, 1 or 0. 
+   - to calculate log-likelihood of colonization, replace $C_i$ with $E_i$ and $O$ with $N-O$
+   - we can include functions with and without certain coefficients to determine which are significant in predicting extinction and colonization
+   - it may be better to do more complex model fitting if, e.g., there are non-linear terms ($M_i$, for example)
+   - another issue: whether or not to use information on the initial pattern of patch occupancies in addition to data on subsequent colonization - the usual assumption is that the metapopulation is at equilibrium, the static occupancy pattern can be useful if there are few actual recorded turnovers
+   - **An alternative method: Moilanen 1999**:
+      - summarize occupancy in a vector $O(t)$, where the elements of the vector are 0/1 for unoccupied/occupied
+      - If we have multiple years of occupancy data, the probability of seeing this pattern is $P(data | E,C) = P[O(1)]\ P[O(2)|O(1)]\ P[O(3)|P[O(2)]]...$ (note that other than the first occupancy data, the right side of this equation is simply the probability of extinction and recolonization; i.e. $P(data | E,C) = P[O(1)]\ P[C(1)]P[E(1)]\ P[C(2)]P[E(2)]...$ where $C(t)\ and\ E(t)$ are vectors of 0/1 describing colonization fates of initially empty sites and extinction fates of initially occupied sites and $P[C(1)]$ is the probability of seeing the observed set of colonization events ($C(1)$) from years 1 to 2
+      - We estimate the log-likelihood with $logL(data | E,C) = logL[O(1)|E,C]+\sum^T_{t=2}logL_E(t)+logL_C(t)$
+         - The right side can be estimated as the last log-likelihood equation, and the left side is calculated by running a metapopulation for a long time using the observed initial occupancy as a starting point
+         - Then, calculate the probability of getting from each year's simulated occupancy pattern to the observed occupancy pattern in one time step based on that year's set of $E_i$ and $C_i$ probabilities
+         - This creates a simulated occupancy pattern $X(t)$ in time $t$ over $Z$ years of simulation:
+         - $L[O(1)|E,C]=\frac{1}{Z} \sum^Z_{t=1}P[X(t+1)=O(1)|X(t)]$
+         - Note: this can be biased, especially if there are many iterations over a large $Z$, as the model may be fittting less for col/ext rates that result in $X(t)$ being close to $O(1)$ and more for rates that increase the probability of jumping from poor predicted $X(t)$ distributions to the observed one - can be ammended by setting a limit or running the simulation over more years until parameter estimates converge
+      - This must be used with a minimization algorithm to search for the best values for coefficients in $u_E\ and\ u_C$ (see boxes 11.1 and 11.2)
+      - If we do not use the assumption of stability, base likelihood only on transitions, not $O(1)$, so the log-likelihood of this component=0
+    - Once the parameters of colonization and extinction have been estimated, it is possible to simulate the population (box 11.3)
+       - Assumptions: does not include temporal variability in extinction or colonization probabilities due to environmental changes (could be estimated with multiple years of data), also assumes that estimated effects of neighbouring sites on occupancy patterns are due to direct interactions and not spatial/spatio-temporal interactions driven by shared environmental conditions
+       
+## Count-based approaches
+- At the core- **transition matrix** with transitions into multiple sites as a result of dispersal
+   - Example: if we have three sites (M,F,L) without dispersal:
+
+$$
+\begin{bmatrix}
+n_M(t+1) \\
+n_F(t+1) \\ 
+n_L(t+1)
+\end{bmatrix} =
+\begin{bmatrix}
+\lambda_{M,t} &0&0 \\
+0&\lambda_{F,t}&0 \\ 
+0&0&\lambda_{L,t}
+\end{bmatrix}
+\begin{bmatrix}
+n_M(t) \\
+n_F(t) \\ 
+n_L(t)
+\end{bmatrix}
+$$
+
+There is no transitioning between stages, so we have to use simulation (box 11.4) and account for the mean, variance, and correlations of growth rates in each population.
+A quasi-extinction level can be set as a lower limit in each site, especially if there is no movement. 
+
+With simulations, you can run the total population with and without key sub-populations to estimate total population growth rates and CDF of ext time. 
+To add dispersal if there is a constant probability $d$ of an individual dispersing with probability $a$ of them arriving at another marsh if they do indeed disperse.
+
+$$
+\begin{bmatrix}
+n_M(t+1) \\
+n_F(t+1) \\ 
+n_L(t+1)
+\end{bmatrix} =
+\begin{bmatrix}
+(1-d)\lambda_{M,t} &da&da \\
+da&(1-d)\lambda_{F,t}&da \\ 
+da&da&(1-d)\lambda_{L,t}
+\end{bmatrix}
+\begin{bmatrix}
+n_M(t) \\
+n_F(t) \\ 
+n_L(t)
+\end{bmatrix}
+$$
+
+*This assumes that movement happens after census but before much mortality or reproduction occurs.*
+
+In some cases (e.g. the rails at the Mowry population), dispersal has a negative effect; it decreases the overall viability, and low dispersal helps maintain the total population 
+- **enhancing dispersal is not always an advantageous management strategy, especially when some populations are demographic sinks**
+- if the fates of different populations are independent, there is value in protecting even small populations
+
+## Demographic approaches
+- like demographic matrix models, but they explicitly include location as well as age/stage/sex
+- analysis of these models is typically simulation based, for the same reasons
+
+- Create a projection matrix $A$ for a single site, for a post-reproductive census:
+$$
+A=\begin{pmatrix}
+0&0&0&f_4 s_4 \\
+s_1 & s_2(1-g_2) & 0 & 0 \\
+0 & s_2 g_2 & s_3(1-g_3) & 0 \\
+0&0&s_3g_3 & s_4
+\end{pmatrix}
+$$
+
+then, make a grand matrix for all 3 sites:
+$$
+G=\begin{pmatrix}
+0&0&0&f_4 s_4&|& 0&0&0&0&|&0&0&0&0\\
+s_1 & s_2(1-g_2) & 0 & 0 &|& 0&0&0&0&|&0&0&0&0\\
+0 & s_2 g_2 & s_3(1-g_3) & 0 &|& 0&0&0&0&|&0&0&0&0\\
+0&0&s_3g_3 & s_4 &|& 0&0&0&0&|&0&0&0&0\\
+\\
+0&0&0&0&|&0&0&0&f_4 s_4&|&0&0&0&0&\ \\
+0&0&0&0&|&s_1 & s_2(1-g_2) & 0 & 0 &|&0&0&0&0&\ \\
+0&0&0&0&|&0 & s_2 g_2 & s_3(1-g_3) & 0 &|&0&0&0&0&\\\
+0&0&0&0&|&0&0&s_3g_3 & s_4 &|&0&0&0&0&\ \\
+\\
+0&0&0&0&|&0&0&0&0&|&0&0&0&f_4 s_4&\\
+0&0&0&0&|&0&0&0&0&|&s_1 & s_2(1-g_2) & 0 & 0 \\
+0&0&0&0&|&0&0&0&0&|&0 & s_2 g_2 & s_3(1-g_3) & 0\\
+0&0&0&0&|&0&0&0&0&|&0&0&s_3g_3 & s_4 \\
+\end{pmatrix}
+$$
+
+See box 11.5 for simulation technique.
+
+To add movement, simply fill in movement-based equations to simulate dispersal from one site to another - it is possible to apply analytical methods, but only if we ignore complications like density dependence (which can be included if parameter estimates are available).
+
+
+## Individual based models
+- you can also create models that track individuals through space, allowing them to experience location-specific fates (often tied to GIS) 
+- these are largely ideosyncratic; they can include social effects, habitat quality, foraging beahviours, but are limited by data availability - *a desire to include important biological processes in a model must be weighted against the data available*
+
+# Using multi-site PVAs with care
+- it is always a good idea to build the simplest model that can capture the basic, important dynamics of populations being considered
+- then, conduct a sensitivity analysis 
+   - first, alter in concert large sets of parameters you hope have little effect on qualitative results so their values are not key to your results
+   - then, prioritize exploration of rates based on knowledge of the life history of the species (long-lived species typically are more sensitive to adult survival)
+   - then, consider how movement rates between the most viable population in a suite of interconnected sites are probably more critical than movement between less robust populations
