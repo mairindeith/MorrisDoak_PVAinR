@@ -165,10 +165,10 @@ In fact, if sampling variance is high enough, *it is possible to calculate negat
 
 ### Using repeated censuses of the same area to discount for observation area
 
-In this case, assume that poopulation size is estimated by obtaining a single count of all individuals in an area with a known fraction of the total range and extrapolated. 
+In this case, assume that population size is estimated by obtaining a single count of all individuals in an area with a known fraction of the total range and extrapolated. 
 In some years, repeatedly sample to get an estimate of the magnitude of observation error - all observed error is observer error, **not sampling error** as we are censusing the same area.
 
-We do not have a set of replciate samples each year - instead we can extrapolate the observation error in the repeated censuses to the whole population scale. 
+We do not have a set of replicate samples each year - instead we can extrapolate the observation error in the repeated censuses to the whole population scale. 
 
 If $V_t$ is the variance of counts from the repeatedly sampled area in year $t$, and $a_t$ is the total area occupied by the population, and $C_t$ is the estimated population size ($C_t = c_t/b_t$, census divided by the proportion of area covered in census, $b_t$) in year $t$, the variance in $C_t$ due to observation error is $Var(C_t) \approx a_t^2 V_t$. 
 If $log(C_t/C_{t+1})$ is the estimate for our population growth:

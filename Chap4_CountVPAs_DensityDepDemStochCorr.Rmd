@@ -11,7 +11,7 @@ output: html_document
 =====
 
 In almost every population we study, some of the assumptions of the simple count-based VPAs are going to be wrong. 
-Even if we know that violations are likely to occur, having more accurate modelsrequires more and better data.
+Even if we know that violations are likely to occur, having more accurate models requires more and better data.
 
 ## Density dependence
 
@@ -44,7 +44,7 @@ popsize <- data.frame(Nt=Nt, theta4=NaN, theta1=NaN, theta.3=NaN)
 theta <- c(4,1, 0.3)
 for(i in 1:length(theta)){
   theta.tmp <- theta[i]
-  print(theta.tmp)
+  # print(theta.tmp)
   for(row in 1:nrow(popsize)){
     Nt.tmp <- popsize$Nt[row]
     Nt1 <- Nt.tmp * exp(r*(1-(Nt.tmp/K)^theta.tmp))
@@ -55,11 +55,13 @@ for(i in 1:length(theta)){
 ggplot(data=popsize, aes(x=Nt))+
   geom_line(aes(y=theta4), color='red')+
   geom_line(aes(y=theta1), color='blue') +
-  geom_line(aes(y=theta.3), color='black')
+  geom_line(aes(y=theta.3), color='black') +
+  ylab("log(N_t+1/Nt)")
 ```
 
 Extinction risk predicted by the ceiling model. 
-In any model with negative density dependence causes all trajectories to hit the extinction threshold is always 1. 
+
+In any model with negative density dependence, all trajectories will hit the extinction threshold with Pr=1. 
 
 From the diffusion approximation, we can write an expression for the mean time to reach the quasi-extinction threshold $N_x$ from a current population size $N_c$. 
 
@@ -103,7 +105,7 @@ Tbar <- (exp(2*c*k)*(1-exp(-2*c*d))-2*c*d)/(2*mu*c)
 plot(Tbar~Nc, type='l')
 ```
 
-Issues with the ceiling model - assumption that populationg rwoth below the ceiling is density independent - introduced to allow expressions for mean time to extinction (TBar) to be calculated. 
+Issues with the ceiling model - assumption that population below the ceiling is density independent - introduced to allow expressions for mean time to extinction (TBar) to be calculated. 
 But the onset is usually not realistic for actual populations. 
 
 ## PVA for population with negative density dependence - Bay Checkerspot Butterfly
@@ -196,15 +198,18 @@ h.loggrowth <- log(h.census.data[2:length(h.census.data)]/h.census.data[1:length
 # theta <- seq(0.2, 1, by=0.4)
 
 # In SAS, nonlinear least-squares regression must be supplied with derivatives of the function to be fit to the data with respect to each parameter in the model
-# density.ind <- nls(c.loggrowth~r.est)
-density.ind <- 0.001673
+ind.starts <- list(r=0.5)
+density.ind <- nls(c.loggrowth~r, start=ind.starts, control = list(maxiter = 500))
+# density.ind <- 0.001673
 theta.starts <- list(r=0.5, K=200, theta=0.2)
 density.theta <- nls(c.loggrowth~r*(1-(c.census.data[1:length(c.loggrowth)]/K)^theta), start = theta.starts)
 
 ricker.starts <- list(r=0.5, K=200)
 density.ricker <- nls(c.loggrowth~r*(1-(c.census.data[1:length(c.loggrowth)]/K)), start = ricker.starts)
 ```
+
 Now let's look at the model results
+
 ```{r}
 print('Density independent model');
 summary(density.ind);
@@ -215,6 +220,7 @@ summary(density.ricker)
 ```
 
 We now calculate the log-likelihood of each model with:
+
 $$log L = \frac{-q}{2} log(2 \pi V_r) - \frac{1}{2V_r} \sum^q_{t=1}[log(\frac{N_{t+1}}{N_t})-P_t]^2 $$
 where $P_t$ is the log population growth predicted by the model in each year t, *q* is the number of measurements in the log-population growth rate, and $V_r$ is the residual variance calculated in Step 1. 
 
@@ -298,9 +304,11 @@ $$ \hat{\sigma}^2 = \frac{qV_r}{q-1} $$
 ```{r}
 sigma_hat <- (density.ricker.df*density.ricker.vr)/(density.ricker.df-1)
 ```
+
 We can sample values from a normal distribution with a mean=0 and variance=1 (the standard sampling method in `rnorm`) and multiply it by $\sqrt{\hat{\sigma}^2}$ to get random values with mean=0 and variance=$\hat{\sigma}^2$. 
 
 Now we can simulate the population under the Ricker model with random environmental variation. 
+
 ```{r}
 # This function calculates the probability that a population following the Ricker curve with a starting population Nc falls below the Nx threshold
 #    by time Tmax
@@ -364,10 +372,10 @@ The probability of extinction is relatively low, and doesn't reach 40% until ~20
 
 The JRH population went extinct earlier! M+D suggest that we repeat the analysis with the new population:
 ```{r repeated.analysis.jrh}
-# density.ind <- nls(h.loggrowth~r.est)
-density.ind <- -0.05224
+density.ind <- nls(h.loggrowth~r, start=list(r=0.5), control=list(maxiter=500))
+# density.ind <- -0.05224
 theta.starts <- list(r=0.5, K=200, theta=0.2)
-density.theta <- nls(h.loggrowth~r*(1-(h.census.data[1:length(h.loggrowth)]/K)^theta), start = theta.starts)
+density.theta <- nls(h.loggrowth~r*(1-(h.census.data[1:length(h.loggrowth)]/K)^theta), start = theta.starts,control = list(maxiter = 500))
 
 ricker.starts <- list(r=0.5, K=200)
 density.ricker <- nls(h.loggrowth~r*(1-(h.census.data[1:length(h.loggrowth)]/K)), start = ricker.starts)
@@ -682,7 +690,7 @@ However, we still have to ensure that the expected variance of environmental dev
 
 $$\epsilon_t = \rho \epsilon_{t-1} + \sqrt{\sigma^2} \sqrt{1-\rho^2}z_t$$
 
-The new random term, $z_t$ is scaled by $\sqrt{\sigma^2} \sqrt{1-\rho^2}$ to assure that theh variance of the string of $\epsilon_t$ equals $\sigma^2$.
+The new random term, $z_t$ is scaled by $\sqrt{\sigma^2} \sqrt{1-\rho^2}$ to assure that the variance of the string of $\epsilon_t$ equals $\sigma^2$.
 
 We can write a code to simulate the probability of quasi-extinction for the Ricker model:
 
@@ -751,6 +759,7 @@ The mean is 0.01467.
 The catastrophic log growth rate is the mean minus the amount of deviation between the mean and the bonanza: $0.01467-(0.2683-0.01467) = -0.2390$. 
 
 ### Example of coding catastrophes and bonanzas
+
 Our time series is split into typical and atypical years - each with a probability. 
 Typical years have a population growth rate drawn from a lognormal distribution; atypical years' growth rates are stored in the `outliers` vector and drawn at random. 
 

@@ -56,6 +56,7 @@ An ideal state variable is **highly correlated** for all members of that state (
 3. If classes are difficult to decide or if biological data are insufficient, graphical and statistical analysis of results can help - the appropriate tool depends on:
    1. If the vital rate is binary (survive/not), discrete but non-binary (birds may fledge 1,2,3, or 4 in a nest), or nearly continuous (very fecund species vary in effectively continuous manner among individuals)
    2. Whether the state variable is continuous (size/age) or discrete (stages)
+   
 ```{r echo=F}
 library(kableExtra)
 
@@ -70,8 +71,8 @@ rownames(tests.df) <- classifier
 kable(tests.df) %>%
   kable_styling(bootstrap_options = "striped", full_width = F)
 ```
-*Note: simple logistic regression models predict steadily increasing/decreasing survival probabilities as a f'n of size/age. Logistic models can include more complex patterns like parabolic*
 
+*Note: simple logistic regression models predict steadily increasing/decreasing survival probabilities as a f'n of size/age. Logistic models can include more complex patterns like parabolic*
 
 If two or more classifying variables are statistically related to vital rates (according to the statistical tests in the above table), you can decide which one to use based on:
 
@@ -79,13 +80,17 @@ If two or more classifying variables are statistically related to vital rates (a
 - Test each individually with log-linear models (although requires that continuous state variables are discretized first)
 - Assess the ability of each classifying variable to predict BOTH vital rates (fecundity and survival) - often one classifier will be a better predictor for both than the other
 - If not, use $AIC_c$ based model selection, where $AIC_c$ is summed from the log-likelihoods of both models summed together (i.e. compute AIC for each state variable and choose the one with the lowest value):
+
 $$ AIC_c = -2(logL_{max,s}+logL_{max,f}) + \frac{2p_s n_s}{n_s - p_s - 1} + \frac{2p_f n_f}{n_f - p_f -1 } $$
+
 For example, assume that a simple logistic regression predicts survival vs. age, and a linear regression predicts fertility vs. age. 
 The former regression has 2 parameters, the latter 3 (slope, intercept, residual variance). 
+
 $logL_{max,f}$ can be calculated from the residual sum of squares, while the $logL_{max,s}$ can be output from statistical software.
 We could then compare the calculated $AIC_c$ for the age-based model to the $AIC_c$ value for a stage-based model in which there is a quadratic regression for fertility and a hazard function for survival. 
 
-4. Set class boundaries - for an age-structured model, widths of all classes must equal the interval between censuses; for stage-based classes, classes are synonymous with stages so this determines class boundaries. 
+4. Set class boundaries - for an age-structured model, widths of all classes must equal the interval between censuses; for stage-based classes, classes are synonymous with stages so this determines class boundaries.
+
 **Deciding the number of classes is important** - we want it to be large enough to encompass real differences in vital rates between classes (i.e. over-grouping can hide real differences) = more accurately reflects the time individuals require to advance from birth to reproduction caused by the processes of grwoth and matruation and have strong effects (e.g. if an organism takes 10 years to reproduce and we create 10 pre-reproductive classes to ensure individuals have to survive in each year from birth to reproduction; two pre-reproductive classes would result in some individuals to reproduce after 2 time intervals).
 **Too many classes can also be problematic** - there may not be many individuals in each class and we reduce sample size. 
 
@@ -139,6 +144,7 @@ Fecundity for each mode can be calculated as above.
 Number of rows **and** number of columns = number of classes. 
 $a_{i,j}$ is the element in row $i$ and column $j$ of the matrix; or the probability that an individual of class $j$ in this census with contribute to an individual of class $i$ in the next. 
 In other words, individuals transition from $j$ to $i$.
+
 $$A = \begin{bmatrix} 
 a_{1,1} & a_{1,2} & a_{1,3}\\
 a_{2,1} & a_{2,2} & a_{2,3} \\
